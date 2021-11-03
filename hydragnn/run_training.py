@@ -22,7 +22,8 @@ from hydragnn.preprocess.load_data import dataset_loading_and_splitting
 from hydragnn.utils.distributed import setup_ddp, get_comm_size_and_rank
 from hydragnn.utils.print_utils import print_distributed
 from hydragnn.utils.time_utils import print_timers
-from hydragnn.models.create import create, get_device
+from hydragnn.models.create import create
+from hydragnn.utils.device import get_device_from_name, get_device_name
 from hydragnn.train.train_validate_test import train_validate_test
 
 
@@ -152,7 +153,8 @@ def _(config: dict):
         )
     )
 
-    device_name, device = get_device(config["Verbosity"]["level"])
+    device_name = get_device_name(config["Verbosity"]["level"])
+    device = get_device_from_name(device_name)
     if dist.is_initialized():
         if device_name == "cpu":
             model = torch.nn.parallel.DistributedDataParallel(model)

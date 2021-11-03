@@ -23,12 +23,12 @@ def get_device_list():
     return available_gpus
 
 
-def get_device(use_gpu=True, rank_per_model=1, verbosity_level=0):
+def get_device_name(use_gpu=True, rank_per_model=1, verbosity_level=0):
 
     available_gpus = get_device_list()
     if not use_gpu or not available_gpus:
         print_distributed(verbosity_level, "Using CPU")
-        return "cpu", torch.device("cpu")
+        return "cpu"
 
     world_size, world_rank = get_comm_size_and_rank()
     if rank_per_model != 1:
@@ -53,4 +53,12 @@ def get_device(use_gpu=True, rank_per_model=1, verbosity_level=0):
 
     device_name = "cuda:" + str(localrank)
 
-    return device_name, torch.device(device_name)
+    return device_name
+
+def get_device(use_gpu=True, rank_per_model=1, verbosity_level=0):
+
+    return torch.device(get_device_name(use_gpu, rank_per_model, verbosity_level))
+
+def get_device_from_name(name: str):
+
+    return torch.device(name)

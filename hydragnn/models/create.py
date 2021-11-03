@@ -38,7 +38,7 @@ def create(
     timer.start()
     torch.manual_seed(0)
 
-    _, device = get_device(use_gpu, verbosity_level=verbosity_level)
+    device = get_device(use_gpu, verbosity_level=verbosity_level)
 
     num_atoms = dataset[0].num_nodes  # FIXME: assumes constant number of atoms
 
