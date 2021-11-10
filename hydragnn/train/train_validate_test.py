@@ -167,7 +167,6 @@ def train_validate_test(
 
 def train(loader, model, opt, verbosity):
 
-    device = next(model.parameters()).device
     tasks_error = np.zeros(model.num_heads)
     tasks_noderr = np.zeros(model.num_heads)
 
@@ -175,7 +174,6 @@ def train(loader, model, opt, verbosity):
 
     total_error = 0
     for data in iterate_tqdm(loader, verbosity):
-        data = data.to(device)
         opt.zero_grad()
 
         pred = model(data)
@@ -198,14 +196,11 @@ def train(loader, model, opt, verbosity):
 @torch.no_grad()
 def validate(loader, model, verbosity):
 
-    device = next(model.parameters()).device
-
     total_error = 0
     tasks_error = np.zeros(model.num_heads)
     tasks_noderr = np.zeros(model.num_heads)
     model.eval()
     for data in iterate_tqdm(loader, verbosity):
-        data = data.to(device)
 
         pred = model(data)
         error, tasks_rmse, tasks_nodes = model.loss_rmse(pred, data.y)
@@ -224,8 +219,6 @@ def validate(loader, model, verbosity):
 @torch.no_grad()
 def test(loader, model, verbosity):
 
-    device = next(model.parameters()).device
-
     total_error = 0
     tasks_error = np.zeros(model.num_heads)
     tasks_noderr = np.zeros(model.num_heads)
@@ -240,7 +233,6 @@ def test(loader, model, verbosity):
             for ihead in range(model.num_heads)
         ]
     for data in iterate_tqdm(loader, verbosity):
-        data = data.to(device)
 
         pred = model(data)
         error, tasks_rmse, tasks_nodes = model.loss_rmse(pred, data.y)

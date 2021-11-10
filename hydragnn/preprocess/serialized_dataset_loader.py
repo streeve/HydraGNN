@@ -22,6 +22,7 @@ from .helper_functions import (
     order_candidates,
     resolve_neighbour_conflicts,
 )
+from hydragnn.utils.device import get_device
 from hydragnn.utils.print_utils import print_distributed, iterate_tqdm
 
 
@@ -72,9 +73,11 @@ class SerializedDataLoader:
             max_num_node_neighbours=config["Architecture"]["max_neighbours"],
         )
 
+        device = get_device()
         for data in dataset:
-            data.edge_index = edge_index
-            data.edge_attr = edge_distances
+            data.to(device)
+            data.edge_index = edge_index.to(device)
+            data.edge_attr = edge_distances.to(device)
             self.__update_predicted_values(
                 config["Variables_of_interest"]["type"],
                 config["Variables_of_interest"]["output_index"],
@@ -125,7 +128,7 @@ class SerializedDataLoader:
             else:
                 raise ValueError("Unknown output type", type[item])
             output_feature.append(feat_)
-        data.y = torch.cat(output_feature, 0)
+        data.y = torch.cat(output_feature, 0).to(get_device())
 
     def __compute_edges(self, data: Data, radius: float, max_num_node_neighbours: int):
         """Computes edges of a structure depending on the maximum number of neighbour atoms that each atom can have
@@ -179,9 +182,9 @@ class SerializedDataLoader:
             adjacency_matrix[point, neighbours] = 1
             adjacency_matrix[neighbours, point] = 1
 
-        edge_index = torch.tensor(np.nonzero(adjacency_matrix))
+        edge_index = torch.tensor(np.nonzero(adjacency_matrix), device=get_device())
         edge_lengths = (
-            torch.tensor(distance_matrix[np.nonzero(adjacency_matrix)])
+            torch.tensor(distance_matrix[np.nonzero(adjacency_matrix)], device=get_device())
             .reshape((edge_index.shape[1], 1))
             .type(torch.FloatTensor)
         )
