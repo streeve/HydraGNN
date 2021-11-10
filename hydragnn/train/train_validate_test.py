@@ -150,7 +150,9 @@ def train_validate_test(
         output_names=config["Variables_of_interest"]["output_names"],
     )
     ######plot loss history#####
-    visualizer.plot_history(
+
+
+"""    visualizer.plot_history(
         total_loss_train,
         total_loss_val,
         total_loss_test,
@@ -163,12 +165,15 @@ def train_validate_test(
         model.loss_weights,
         config["Variables_of_interest"]["output_names"],
     )
+"""
 
 
 def train(loader, model, opt, verbosity):
 
-    tasks_error = np.zeros(model.num_heads)
-    tasks_noderr = np.zeros(model.num_heads)
+
+    device = next(model.parameters()).device
+    tasks_error = torch.zeros(model.num_heads, device=device)
+    tasks_noderr = torch.zeros(model.num_heads, device=device)
 
     model.train()
 
@@ -197,8 +202,8 @@ def train(loader, model, opt, verbosity):
 def validate(loader, model, verbosity):
 
     total_error = 0
-    tasks_error = np.zeros(model.num_heads)
-    tasks_noderr = np.zeros(model.num_heads)
+    tasks_error = torch.zeros(model.num_heads, device=device)
+    tasks_noderr = torch.zeros(model.num_heads, device=device)
     model.eval()
     for data in iterate_tqdm(loader, verbosity):
 

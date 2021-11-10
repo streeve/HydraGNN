@@ -205,7 +205,11 @@ class Base(torch.nn.Module):
         value_shape = value.shape
         if pred_shape != value_shape:
             value = torch.reshape(value, pred_shape)
-        return torch.sqrt(F.mse_loss(pred, value)), [], []
+        return (
+            torch.sqrt(F.mse_loss(pred, value)),
+            torch.empty(device=device),
+            torch.empty(device=device),
+        )
 
     def loss_nll(self, pred, value):
         # negative log likelihood loss
