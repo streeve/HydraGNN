@@ -37,17 +37,18 @@ def train_validate_test(
 ):
     num_epoch = config["Training"]["num_epoch"]
     # total loss tracking for train/vali/test
-    total_loss_train = []
-    total_loss_val = []
-    total_loss_test = []
+    device = next(model.parameters()).device
+    total_loss_train = torch.zeros(num_epoch, device=device)
+    total_loss_val = torch.zeros(num_epoch, device=device)
+    total_loss_test = torch.zeros(num_epoch, device=device)
     # loss tracking of summation across all nodes for node feature predictions
-    task_loss_train_sum = []
-    task_loss_test_sum = []
-    task_loss_val_sum = []
+    task_loss_train_sum = torch.zeros(num_epoch, device=device)
+    task_loss_test_sum = torch.zeros(num_epoch, device=device)
+    task_loss_val_sum = torch.zeros(num_epoch, device=device)
     # loss tracking for each head/task
-    task_loss_train = []
-    task_loss_test = []
-    task_loss_val = []
+    task_loss_train = torch.zeros(num_epoch, device=device)
+    task_loss_test = torch.zeros(num_epoch, device=device)
+    task_loss_val = torch.zeros(num_epoch, device=device)
 
     if isinstance(model, torch.nn.parallel.distributed.DistributedDataParallel):
         model = model.module
@@ -103,16 +104,16 @@ def train_validate_test(
         )
         print_distributed(verbosity, "Tasks MAE:", train_taskserr)
 
-        total_loss_train.append(train_mae)
-        total_loss_val.append(val_mae)
-        total_loss_test.append(test_rmse[0])
-        task_loss_train_sum.append(train_taskserr)
-        task_loss_val_sum.append(val_taskserr)
-        task_loss_test_sum.append(test_rmse[1])
+        total_loss_train[epoch] = train_mae
+        total_loss_val[epoch] = val_mae
+        total_loss_test[epoch] = test_rmse[0]
+        task_loss_train_sum[epoch] = train_taskserr
+        task_loss_val_sum[epoch] = val_taskserr
+        task_loss_test_sum[epoch] = test_rmse[1]
 
-        task_loss_train.append(train_taskserr_nodes)
-        task_loss_val.append(val_taskserr_nodes)
-        task_loss_test.append(test_rmse[2])
+        task_loss_train[epoch] = train_taskserr_nodes
+        task_loss_val[epoch] = val_taskserr_nodes
+        task_loss_test[epoch] = test_rmse[2]
 
         ###tracking the solution evolving with training
         if plot_hist_solution:
@@ -185,10 +186,10 @@ def train(loader, model, opt, verbosity):
 
         loss.backward()
         opt.step()
-        total_error += loss.item() * data.num_graphs
+        total_error += loss * data.num_graphs
         for itask in range(len(tasks_rmse)):
-            tasks_error[itask] += tasks_rmse[itask].item() * data.num_graphs
-            tasks_noderr[itask] += tasks_nodes[itask].item() * data.num_graphs
+            tasks_error[itask] += tasks_rmse[itask] * data.num_graphs
+            tasks_noderr[itask] += tasks_nodes[itask] * data.num_graphs
 
     return (
         total_error / len(loader.dataset),
@@ -208,10 +209,10 @@ def validate(loader, model, verbosity):
 
         pred = model(data)
         error, tasks_rmse, tasks_nodes = model.loss_rmse(pred, data.y)
-        total_error += error.item() * data.num_graphs
+        total_error += error * data.num_graphs
         for itask in range(len(tasks_rmse)):
-            tasks_error[itask] += tasks_rmse[itask].item() * data.num_graphs
-            tasks_noderr[itask] += tasks_nodes[itask].item() * data.num_graphs
+            tasks_error[itask] += tasks_rmse[itask] * data.num_graphs
+            tasks_noderr[itask] += tasks_nodes[itask] * data.num_graphs
 
     return (
         total_error / len(loader.dataset),
@@ -224,37 +225,37 @@ def validate(loader, model, verbosity):
 def test(loader, model, verbosity):
 
     total_error = 0
-    tasks_error = np.zeros(model.num_heads)
-    tasks_noderr = np.zeros(model.num_heads)
+    tasks_error = torch.zeros(model.num_heads)
+    tasks_noderr = torch.zeros(model.num_heads)
     model.eval()
-    true_values = [[] for _ in range(model.num_heads)]
-    predicted_values = [[] for _ in range(model.num_heads)]
-    IImean = [i for i in range(sum(model.head_dims))]
-    if model.ilossweights_nll == 1:
-        IImean = [i for i in range(sum(model.head_dims) + model.num_heads)]
-        [
-            IImean.remove(sum(model.head_dims[: ihead + 1]) + (ihead + 1) * 1 - 1)
-            for ihead in range(model.num_heads)
-        ]
+    values_shape = 0
+    for data in loader:
+        values_shape += data.y.flatten().size()[0]
+    true_values = torch.zeros([model.num_heads, values_shape])
+    predicted_values = torch.zeros([model.num_heads, values_shape])
+    IImean = torch.arange(0, sum(model.head_dims))
     for data in iterate_tqdm(loader, verbosity):
 
         pred = model(data)
         error, tasks_rmse, tasks_nodes = model.loss_rmse(pred, data.y)
-        total_error += error.item() * data.num_graphs
+        total_error += error * data.num_graphs
         for itask in range(len(tasks_rmse)):
-            tasks_error[itask] += tasks_rmse[itask].item() * data.num_graphs
-            tasks_noderr[itask] += tasks_nodes[itask].item() * data.num_graphs
+            tasks_error[itask] += tasks_rmse[itask] * data.num_graphs
+            tasks_noderr[itask] += tasks_nodes[itask] * data.num_graphs
 
         ytrue = torch.reshape(data.y, (-1, sum(model.head_dims)))
+        print(data.y.size(), ytrue.size())
         for ihead in range(model.num_heads):
-            isum = sum(model.head_dims[: ihead + 1])
-            true_values[ihead].extend(
-                ytrue[:, isum - model.head_dims[ihead] : isum].tolist()
-            )
-            predicted_values[ihead].extend(
-                pred[:, IImean[isum - model.head_dims[ihead] : isum]].tolist()
-            )
-
+            end = sum(model.head_dims[: ihead + 1])
+            begin = end - model.head_dims[ihead]
+            print(begin, end, true_values.size())
+            true_values[ihead, begin:end] = ytrue[ihead, begin:end]
+            predicted_values[ihead, begin:end] = pred[ihead, IImean[begin:end]]
+    print(
+        true_values.size(),
+        len(data),
+        model.num_heads,
+    )
     return (
         total_error / len(loader.dataset),
         tasks_error / len(loader.dataset),
