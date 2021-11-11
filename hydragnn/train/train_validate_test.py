@@ -55,7 +55,7 @@ def train_validate_test(
         model = model
     # preparing for results visualization
     ## collecting node feature
-    node_feature = []
+    """node_feature = []
     for data in test_loader.dataset:
         node_feature.append(data.x)
     visualizer = Visualizer(
@@ -63,18 +63,18 @@ def train_validate_test(
         node_feature=node_feature,
         num_heads=model.num_heads,
         head_dims=model.head_dims,
-    )
+    )"""
 
     if plot_init_solution:  # visualizing of initial conditions
         test_rmse = test(test_loader, model, verbosity)
         true_values = test_rmse[3]
         predicted_values = test_rmse[4]
-        visualizer.create_scatter_plots(
+        """visualizer.create_scatter_plots(
             true_values,
             predicted_values,
             output_names=config["Variables_of_interest"]["output_names"],
             iepoch=-1,
-        )
+        )"""
 
     timer = Timer("train_validate_test")
     timer.start()
@@ -138,7 +138,7 @@ def train_validate_test(
             config["Variables_of_interest"]["y_minmax"], true_values, predicted_values
         )
 
-    ######result visualization######
+    """######result visualization######
     visualizer.create_plot_global(
         true_values,
         predicted_values,
@@ -152,7 +152,7 @@ def train_validate_test(
     ######plot loss history#####
 
 
-"""    visualizer.plot_history(
+    visualizer.plot_history(
         total_loss_train,
         total_loss_val,
         total_loss_test,
@@ -164,8 +164,7 @@ def train_validate_test(
         task_loss_test,
         model.loss_weights,
         config["Variables_of_interest"]["output_names"],
-    )
-"""
+    )"""
 
 
 def train(loader, model, opt, verbosity):
