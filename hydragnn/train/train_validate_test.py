@@ -90,8 +90,8 @@ def train_validate_test(
         test_rmse = test(test_loader, model, verbosity)
         scheduler.step(val_mae)
         if writer is not None:
-            writer.add_scalar("train error", train_mae, epoch)
-            writer.add_scalar("validate error", val_mae, epoch)
+            writer.add_scalar("train error", train_mae[0], epoch)
+            writer.add_scalar("validate error", val_mae[0], epoch)
             writer.add_scalar("test error", test_rmse[0], epoch)
             for ivar in range(model.num_heads):
                 writer.add_scalar(
@@ -99,8 +99,8 @@ def train_validate_test(
                 )
         print_distributed(
             verbosity,
-            f"Epoch: {epoch:02d}, Train MAE: {train_mae:.8f}, Val MAE: {val_mae:.8f}, "
-            f"Test RMSE: {test_rmse[0]:.8f}",
+            f"Epoch: {epoch:02d}, Train MAE: {train_mae[0].item():.8f}, Val MAE: {val_mae[0].item():.8f}, "
+            f"Test RMSE: {test_rmse[0].item():.8f}",
         )
         print_distributed(verbosity, "Tasks MAE:", train_taskserr)
 
@@ -170,14 +170,13 @@ def train_validate_test(
 
 def train(loader, model, opt, verbosity):
 
-
     device = next(model.parameters()).device
+    total_error = torch.zeros(1, device=device)
     tasks_error = torch.zeros(model.num_heads, device=device)
     tasks_noderr = torch.zeros(model.num_heads, device=device)
 
     model.train()
 
-    total_error = 0
     for data in iterate_tqdm(loader, verbosity):
         opt.zero_grad()
 
@@ -186,7 +185,7 @@ def train(loader, model, opt, verbosity):
 
         loss.backward()
         opt.step()
-        total_error += loss * data.num_graphs
+        total_error[0] += loss * data.num_graphs
         for itask in range(len(tasks_rmse)):
             tasks_error[itask] += tasks_rmse[itask] * data.num_graphs
             tasks_noderr[itask] += tasks_nodes[itask] * data.num_graphs
@@ -201,7 +200,8 @@ def train(loader, model, opt, verbosity):
 @torch.no_grad()
 def validate(loader, model, verbosity):
 
-    total_error = 0
+    device = next(model.parameters()).device
+    total_error = torch.zeros(1, device=device)
     tasks_error = torch.zeros(model.num_heads, device=device)
     tasks_noderr = torch.zeros(model.num_heads, device=device)
     model.eval()
@@ -209,7 +209,7 @@ def validate(loader, model, verbosity):
 
         pred = model(data)
         error, tasks_rmse, tasks_nodes = model.loss_rmse(pred, data.y)
-        total_error += error * data.num_graphs
+        total_error[0] += error * data.num_graphs
         for itask in range(len(tasks_rmse)):
             tasks_error[itask] += tasks_rmse[itask] * data.num_graphs
             tasks_noderr[itask] += tasks_nodes[itask] * data.num_graphs
@@ -224,21 +224,22 @@ def validate(loader, model, verbosity):
 @torch.no_grad()
 def test(loader, model, verbosity):
 
-    total_error = 0
+    device = next(model.parameters()).device
+    total_error = torch.zeros(1, device=device)
     tasks_error = torch.zeros(model.num_heads, device=device)
     tasks_noderr = torch.zeros(model.num_heads, device=device)
     model.eval()
-    values_shape = 0
+    values_shape = torch.zeros(1, device=device, dtype=torch.int)
     for data in loader:
-        values_shape += data.y.flatten().size()[0]
-    true_values = torch.zeros([model.num_heads, values_shape], device=device)
-    predicted_values = torch.zeros([model.num_heads, values_shape], device=device)
+        values_shape[0] += data.y.flatten().size()[0]
+    true_values = torch.zeros((model.num_heads, values_shape[0]), device=device)
+    predicted_values = torch.zeros((model.num_heads, values_shape), device=device)
     IImean = torch.arange(0, sum(model.head_dims), device=device)
     for data in iterate_tqdm(loader, verbosity):
 
         pred = model(data)
         error, tasks_rmse, tasks_nodes = model.loss_rmse(pred, data.y)
-        total_error += error * data.num_graphs
+        total_error[0] += error * data.num_graphs
         for itask in range(len(tasks_rmse)):
             tasks_error[itask] += tasks_rmse[itask] * data.num_graphs
             tasks_noderr[itask] += tasks_nodes[itask] * data.num_graphs
