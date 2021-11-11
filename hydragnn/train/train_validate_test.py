@@ -244,18 +244,12 @@ def test(loader, model, verbosity):
             tasks_noderr[itask] += tasks_nodes[itask] * data.num_graphs
 
         ytrue = torch.reshape(data.y, (-1, sum(model.head_dims)))
-        print(data.y.size(), ytrue.size())
         for ihead in range(model.num_heads):
             end = sum(model.head_dims[: ihead + 1])
             begin = end - model.head_dims[ihead]
-            print(begin, end, true_values.size())
             true_values[ihead, begin:end] = ytrue[ihead, begin:end]
             predicted_values[ihead, begin:end] = pred[ihead, IImean[begin:end]]
-    print(
-        true_values.size(),
-        len(data),
-        model.num_heads,
-    )
+
     return (
         total_error / len(loader.dataset),
         tasks_error / len(loader.dataset),
