@@ -225,15 +225,15 @@ def validate(loader, model, verbosity):
 def test(loader, model, verbosity):
 
     total_error = 0
-    tasks_error = torch.zeros(model.num_heads)
-    tasks_noderr = torch.zeros(model.num_heads)
+    tasks_error = torch.zeros(model.num_heads, device=device)
+    tasks_noderr = torch.zeros(model.num_heads, device=device)
     model.eval()
     values_shape = 0
     for data in loader:
         values_shape += data.y.flatten().size()[0]
-    true_values = torch.zeros([model.num_heads, values_shape])
-    predicted_values = torch.zeros([model.num_heads, values_shape])
-    IImean = torch.arange(0, sum(model.head_dims))
+    true_values = torch.zeros([model.num_heads, values_shape], device=device)
+    predicted_values = torch.zeros([model.num_heads, values_shape], device=device)
+    IImean = torch.arange(0, sum(model.head_dims), device=device)
     for data in iterate_tqdm(loader, verbosity):
 
         pred = model(data)
