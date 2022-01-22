@@ -5,6 +5,8 @@
     "Dataset": {
         "name": "unit_test_singlehead",
         "format": "unit_test",
+        "compositional_stratified_splitting": true,
+        "rotational_invariance": false,
         "path": {
             "train": "dataset/unit_test_singlehead_train",
             "test": "dataset/unit_test_singlehead_test",
@@ -26,6 +28,7 @@
             "model_type": "PNA",
             "radius": 2.0,
             "max_neighbours": 100,
+            "periodic_boundary_conditions": false,
             "hidden_dim": 8,
             "num_conv_layers": 2,
             "output_heads": {
