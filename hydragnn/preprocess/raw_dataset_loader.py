@@ -81,21 +81,19 @@ class RawDataLoader:
             if not os.path.exists(raw_data_path):
                 raise ValueError("Folder not found: ", raw_data_path)
 
-            dataset = []
-            assert (
-                len(os.listdir(raw_data_path)) > 0
-            ), "No data files provided in {}!".format(raw_data_path)
+            all_files = os.listdir(raw_data_path)[:4000]
+            assert len(all_files) > 0, "No data files provided in {}!".format(
+                raw_data_path
+            )
 
-            for filename in os.listdir(raw_data_path):
+            dataset = [None] * len(all_files)
+            for fn, filename in enumerate(all_files):
                 if filename == ".DS_Store":
                     continue
-                f = open(os.path.join(raw_data_path, filename), "r", encoding="utf-8")
-                all_lines = f.readlines()
-                data_object = self.__transform_input_to_data_object_base(
-                    lines=all_lines
-                )
-                dataset.append(data_object)
-                f.close()
+                path = os.path.join(raw_data_path, filename)
+                with open(path, "r", encoding="utf-8") as f:
+                    lines = f.readlines()
+                dataset[fn] = self.__extract_features(lines)
 
             if self.data_format == "LSMS":
                 for idx, data_object in enumerate(dataset):
@@ -123,7 +121,7 @@ class RawDataLoader:
                 pickle.dump(self.minmax_graph_feature, f)
                 pickle.dump(dataset_normalized, f)
 
-    def __transform_input_to_data_object_base(self, lines: [str]):
+    def __extract_features(self, lines: [str]):
         """Transforms lines of strings read from the raw data file to Data object and returns it.
 
         Parameters
@@ -138,34 +136,28 @@ class RawDataLoader:
 
         data_object = Data()
 
-        graph_feat = lines[0].split(None, 2)
+        graph_feat = np.loadtxt(lines[0:1])
         g_feature = []
         # collect graph features
         for item in range(len(self.graph_feature_dim)):
             for icomp in range(self.graph_feature_dim[item]):
                 it_comp = self.graph_feature_col[item] + icomp
-                g_feature.append(float(graph_feat[it_comp].strip()))
-        data_object.y = tensor(g_feature)
+                g_feature.append(graph_feat[it_comp])
+        data_object.y = tensor(g_feature, dtype=torch.float32)
 
+        nodes = np.loadtxt(lines[1:])
         node_feature_matrix = []
-        node_position_matrix = []
-        for line in lines[1:]:
-            node_feat = line.split(None, 11)
 
-            x_pos = float(node_feat[2].strip())
-            y_pos = float(node_feat[3].strip())
-            z_pos = float(node_feat[4].strip())
-            node_position_matrix.append([x_pos, y_pos, z_pos])
+        node_feature = []
+        for item in range(len(self.node_feature_dim)):
+            for icomp in range(self.node_feature_dim[item]):
+                it_comp = self.node_feature_col[item] + icomp
+                node_feature.append(nodes[:, it_comp])
+        node_feature_matrix.append(node_feature)
 
-            node_feature = []
-            for item in range(len(self.node_feature_dim)):
-                for icomp in range(self.node_feature_dim[item]):
-                    it_comp = self.node_feature_col[item] + icomp
-                    node_feature.append(float(node_feat[it_comp].strip()))
-            node_feature_matrix.append(node_feature)
+        data_object.pos = tensor(nodes[:, 2:5], dtype=torch.float32)
+        data_object.x = tensor(node_feature_matrix, dtype=torch.float32)
 
-        data_object.pos = tensor(node_position_matrix)
-        data_object.x = tensor(node_feature_matrix)
         return data_object
 
     def __charge_density_update_for_LSMS(self, data_object: Data):
