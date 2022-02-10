@@ -140,10 +140,10 @@ def run_uncertainty(
             num_samples,
         )
 
-    plot_uq(pred_mean, pred_up, pred_down, y, c_up[0], c_down[0])
+    plot_uq(pred_mean, pred_up, pred_down, y, c_up[0], c_down[0], comp)
 
 
-def plot_uq(pred_mean, pred_up, pred_down, y, c_up, c_down):
+def plot_uq(pred_mean, pred_up, pred_down, y, c_up, c_down, comp):
     """
     Plot mean, upper, and lower predictions.
     """
@@ -153,21 +153,23 @@ def plot_uq(pred_mean, pred_up, pred_down, y, c_up, c_down):
     pred_mean_y = pred_mean.detach()
     pred_up_y = pred_up.detach()
     pred_down_y = pred_down.detach()
-    ax.scatter(yx, pred_mean_y, edgecolor=c[0], marker="o", facecolor="none")
+    # bar = torch.stack([c_down * pred_down_y, c_up * pred_up_y], 0).squeeze()
+    # ax.errorbar(comp, pred_mean_y, yerr=bar, marker="o")
+    ax.scatter(comp, pred_mean_y, edgecolor="#005073", marker="o", facecolor="none")
     # ax.scatter(yx, pred_mean_y+pred_up_y, edgecolor=c[1], marker="o", facecolor="none")
     # ax.scatter(yx, pred_mean_y-pred_down_y, edgecolor=c[2], marker="o", facecolor="none")
 
     ax.scatter(
-        yx.squeeze() + 0.001,
+        comp,
         (pred_mean_y + c_up * pred_up_y),
-        edgecolor="#9999ff",
+        edgecolor="#a8e6cf",
         marker="o",
         facecolor="none",
     )
     ax.scatter(
-        yx.squeeze() - 0.001,
+        comp,
         (pred_mean_y - c_down * pred_down_y),
-        edgecolor="#000066",
+        edgecolor="#ff8b94",
         marker="o",
         facecolor="none",
     )
@@ -234,8 +236,7 @@ def compute_predictions(loader, models, config):
             y = torch.cat((y, data.y), 0)
             comp = torch.cat((comp, data.comp), 0)
 
-    pred.append(y)
-    return pred, comp
+    return pred[0], pred[1], pred[2], y, comp
 
 
 ## NOTE: with MPI, the total dataset (before DDP splitting) should be used to create up and down, then re-split using DDP.
