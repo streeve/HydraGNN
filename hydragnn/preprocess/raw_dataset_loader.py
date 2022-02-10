@@ -161,6 +161,9 @@ class RawDataLoader:
         data_object.pos = tensor(nodes[:, 2:5], dtype=torch.float32)
         data_object.x = tensor(node_feature_matrix, dtype=torch.float32)
 
+        elements, counts = np.unique(nodes[:, 0], return_counts=True)
+        data_object.comp = counts / np.size(nodes)
+
         return data_object
 
     def __charge_density_update_for_LSMS(self, data_object: Data):
