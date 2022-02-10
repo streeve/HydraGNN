@@ -97,7 +97,7 @@ def run_uncertainty(
         model_down = load_model(config, down_loaders[0].dataset, down_name)
 
     #### COMPUTE ALL 3 PREDICTIONS ON TRAINING DATA
-    pred_mean, pred_up, pred_down, y = compute_predictions(
+    pred_mean, pred_up, pred_down, y, comp = compute_predictions(
         mean_loaders[0], (mean_model, model_up, model_down), config
     )
 
@@ -218,6 +218,7 @@ def compute_predictions(loader, models, config):
 
     pred = [None for i in range(len(models))]
     y = None
+    comp = None
     for data in iterate_tqdm(loader, verbosity):
         data = data.to(device)
         for i, m in enumerate(models):
@@ -228,11 +229,13 @@ def compute_predictions(loader, models, config):
                 pred[i] = torch.cat((pred[i], result), 0)
         if y == None:
             y = data.y
+            comp = data.comp
         else:
             y = torch.cat((y, data.y), 0)
+            comp = torch.cat((comp, data.comp), 0)
 
     pred.append(y)
-    return pred
+    return pred, comp
 
 
 ## NOTE: with MPI, the total dataset (before DDP splitting) should be used to create up and down, then re-split using DDP.
