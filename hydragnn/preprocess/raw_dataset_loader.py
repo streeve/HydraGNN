@@ -18,6 +18,8 @@ import torch
 from torch_geometric.data import Data
 from torch import tensor
 
+from hydragnn.utils import iterate_tqdm
+
 # WARNING: DO NOT use collective communication calls here because only rank 0 uses this routines
 
 
@@ -65,6 +67,7 @@ class RawDataLoader:
         self.raw_dataset_name = config["name"]
         self.data_format = config["format"]
         self.path_dictionary = config["path"]
+        self.types = []
 
     def load_raw_data(self):
         """Loads the raw files from specified path, performs the transformation to Data objects and normalization of values.
@@ -81,13 +84,13 @@ class RawDataLoader:
             if not os.path.exists(raw_data_path):
                 raise ValueError("Folder not found: ", raw_data_path)
 
-            all_files = os.listdir(raw_data_path)[:4000]
+            all_files = os.listdir(raw_data_path)
             assert len(all_files) > 0, "No data files provided in {}!".format(
                 raw_data_path
             )
 
             dataset = [None] * len(all_files)
-            for fn, filename in enumerate(all_files):
+            for fn, filename in enumerate(iterate_tqdm(all_files, 2)):
                 if filename == ".DS_Store":
                     continue
                 path = os.path.join(raw_data_path, filename)
@@ -162,7 +165,11 @@ class RawDataLoader:
         data_object.x = tensor(node_feature_matrix, dtype=torch.float32)
 
         elements, counts = np.unique(nodes[:, 0], return_counts=True)
-        data_object.comp = counts / np.size(nodes)
+        data_object.comp = tensor(counts[0] / np.shape(nodes)[0], dtype=torch.float32)
+        # this is a hack.
+        if len(elements) == 1 and elements[0] == 26.0:
+            data_object.comp = 0.0
+            print(data_object.comp)
 
         return data_object
 
