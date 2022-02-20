@@ -168,8 +168,7 @@ class RawDataLoader:
         data_object.comp = tensor(counts[0] / np.shape(nodes)[0], dtype=torch.float32)
         # this is a hack.
         if len(elements) == 1 and elements[0] == 26.0:
-            data_object.comp = 0.0
-            print(data_object.comp)
+            data_object.comp = tensor(0.0, dtype=torch.float32)
 
         return data_object
 
