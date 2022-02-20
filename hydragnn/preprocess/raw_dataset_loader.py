@@ -82,7 +82,7 @@ class RawDataLoader:
             if not os.path.exists(raw_data_path):
                 raise ValueError("Folder not found: ", raw_data_path)
 
-            all_files = os.listdir(raw_data_path)[:4000]
+            all_files = os.listdir(raw_data_path)
             assert len(all_files) > 0, "No data files provided in {}!".format(
                 raw_data_path
             )
