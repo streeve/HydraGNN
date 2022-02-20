@@ -67,6 +67,16 @@ class RawDataLoader:
         self.data_format = config["format"]
         self.path_dictionary = config["path"]
 
+        self.graph_indices = []
+        for c, col in enumerate(self.graph_feature_col):
+            for dim in range(self.graph_feature_dim[c]):
+                self.graph_indices.append(col + dim)
+
+        self.node_indices = []
+        for c, col in enumerate(self.node_feature_col):
+            for dim in range(self.node_feature_dim[c]):
+                self.node_indices.append(col + dim)
+
     def load_raw_data(self):
         """Loads the raw files from specified path, performs the transformation to Data objects and normalization of values.
         After that the serialized data is stored to the serialized_dataset directory.
@@ -137,28 +147,15 @@ class RawDataLoader:
 
         data_object = Data()
 
-        graph_read = np.loadtxt(lines[0:1], ndmin=1)
-        graph_feat = []
-        # collect graph features
-        for item in range(len(self.graph_feature_dim)):
-            for icomp in range(self.graph_feature_dim[item]):
-                it_comp = self.graph_feature_col[item] + icomp
-                graph_feat.append(graph_read[it_comp])
+        graph = np.loadtxt(lines[0:1], ndmin=1)
+        graph_feat = graph[self.graph_indices]
         data_object.y = tensor(graph_feat, dtype=torch.float32)
 
         nodes = np.loadtxt(lines[1:])
-        node_feature_matrix = []
-
-        node_feature = []
-        for item in range(len(self.node_feature_dim)):
-            for icomp in range(self.node_feature_dim[item]):
-                it_comp = self.node_feature_col[item] + icomp
-                node_feature.append(nodes[:, it_comp])
-        node_feature_matrix.append(node_feature)
+        node_feat = nodes[:, self.node_indices]
 
         data_object.pos = tensor(nodes[:, 2:5], dtype=torch.float32)
-        data_object.x = tensor(node_feature_matrix, dtype=torch.float32)
-
+        data_object.x = tensor(node_feat, dtype=torch.float32)
         return data_object
 
     def __charge_density_update_for_LSMS(self, data_object: Data):
