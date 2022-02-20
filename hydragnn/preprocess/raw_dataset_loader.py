@@ -13,6 +13,7 @@ import os
 import numpy as np
 import pickle
 import pathlib
+from tqdm import tqdm
 
 import torch
 from torch_geometric.data import Data
@@ -87,7 +88,7 @@ class RawDataLoader:
             )
 
             dataset = [None] * len(all_files)
-            for fn, filename in enumerate(all_files):
+            for fn, filename in enumerate(tqdm(all_files)):
                 if filename == ".DS_Store":
                     continue
                 path = os.path.join(raw_data_path, filename)
@@ -136,14 +137,14 @@ class RawDataLoader:
 
         data_object = Data()
 
-        graph_feat = np.loadtxt(lines[0:1])
-        g_feature = []
+        graph_read = np.loadtxt(lines[0:1], ndmin=1)
+        graph_feat = []
         # collect graph features
         for item in range(len(self.graph_feature_dim)):
             for icomp in range(self.graph_feature_dim[item]):
                 it_comp = self.graph_feature_col[item] + icomp
-                g_feature.append(graph_feat[it_comp])
-        data_object.y = tensor(g_feature, dtype=torch.float32)
+                graph_feat.append(graph_read[it_comp])
+        data_object.y = tensor(graph_feat, dtype=torch.float32)
 
         nodes = np.loadtxt(lines[1:])
         node_feature_matrix = []
