@@ -36,13 +36,7 @@ from hydragnn.models.create import create_model_config
 from hydragnn.train.train_validate_test import train_validate_test
 
 
-@singledispatch
-def run_training(config, log_name=None):
-    raise TypeError("Input must be filename string or configuration dictionary.")
-
-
-@run_training.register
-def _(config_file: str, log_name=None):
+def run_training(config_file, train_loader, val_loader, test_loader, log_name=None):
 
     with open(config_file, "r") as f:
         config = json.load(f)
@@ -112,3 +106,32 @@ def _(config: dict, log_name=None):
     save_model(model, log_name)
 
     print_timers(verbosity)
+
+
+@singledispatch
+def load_data_and_run_training(config, log_name=None):
+    raise TypeError("Input must be filename string or configuration dictionary.")
+
+
+@load_data_and_run_training.register
+def _(config_file: str, log_name=None):
+
+    with open(config_file, "r") as f:
+        config = json.load(f)
+
+    load_data_and_run_training(config, log_name)
+
+
+@load_data_and_run_training.register
+def _(config: dict, log_name=None):
+
+    try:
+        os.environ["SERIALIZED_DATA_PATH"]
+    except:
+        os.environ["SERIALIZED_DATA_PATH"] = os.getcwd()
+
+    world_size, world_rank = setup_ddp()
+
+    train_loader, val_loader, test_loader = dataset_loading_and_splitting(config=config)
+
+    run_training(config_file, train_loader, val_loader, test_loader, log_name)

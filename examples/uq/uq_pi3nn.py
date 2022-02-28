@@ -44,7 +44,13 @@ from pi3nn.Optimizations import CL_boundary_optimizer
 
 
 def run_uncertainty(
-    config_file_mean, config_file_up_down, retrain_mean=False, retrain_up_down=False
+    config_file_mean,
+    config_file_up_down,
+    train_loader,
+    val_loader,
+    test_loader,
+    retrain_mean=False,
+    retrain_up_down=False,
 ):
     """
     Compute prediction intervals with PI3NN.
@@ -53,7 +59,7 @@ def run_uncertainty(
     out_name = "uq_"
     mean_name = out_name + "mean"
     if retrain_mean:
-        run_training(config_file_mean, mean_name)
+        run_training(config_file_mean, train_loader, val_loader, test_loader, mean_name)
 
     config = {}
     with open(config_file_up_down, "r") as f:
@@ -68,10 +74,7 @@ def run_uncertainty(
     verbosity = config["Verbosity"]["level"]
 
     #### LOAD THE ORIGINAL DATA LOADERS AND THE TRAINED MEAN MODEL
-    ## Question: Should we normalize/denormalize any input/output?
-    mean_loaders = dataset_loading_and_splitting(
-        config=config,
-    )
+    mean_loaders = [train_loader, val_loader, test_loader]
     config = update_config(config, mean_loaders[0], mean_loaders[1], mean_loaders[2])
 
     mean_model = load_model(config, mean_loaders[0].dataset, mean_name)
@@ -129,16 +132,14 @@ def run_uncertainty(
     print(c_up, c_down)
 
     ### COMPUTE PREDICTION INTERVAL COVERAGE PROBABILITY
-    for loader in mean_loaders:
-        compute_picp(
-            pred_mean_y,
-            pred_up_y,
-            pred_down_y,
-            y.detach(),
-            c_up[0],
-            c_down[0],
-            num_samples,
-        )
+    compute_picp(
+        pred_mean_y,
+        pred_up_y,
+        pred_down_y,
+        y.detach(),
+        c_up[0],
+        c_down[0],
+    )
 
     plot_uq(pred_mean, pred_up, pred_down, y, c_up[0], c_down[0], comp)
 
@@ -155,19 +156,21 @@ def plot_uq(pred_mean, pred_up, pred_down, y, c_up, c_down, comp):
     pred_down_y = pred_down.detach()
     # bar = torch.stack([c_down * pred_down_y, c_up * pred_up_y], 0).squeeze()
     # ax.errorbar(comp, pred_mean_y, yerr=bar, marker="o")
-    ax.scatter(comp, pred_mean_y, edgecolor="#005073", marker="o", facecolor="none")
+    ax.scatter(
+        yx, pred_mean_y, edgecolor="#005073", marker="o", facecolor="none"  # comp,
+    )
     # ax.scatter(yx, pred_mean_y+pred_up_y, edgecolor=c[1], marker="o", facecolor="none")
     # ax.scatter(yx, pred_mean_y-pred_down_y, edgecolor=c[2], marker="o", facecolor="none")
 
     ax.scatter(
-        comp,
+        yx,  # comp,
         (pred_mean_y + c_up * pred_up_y),
         edgecolor="#a8e6cf",
         marker="o",
         facecolor="none",
     )
     ax.scatter(
-        comp,
+        yx,  # comp,
         (pred_mean_y - c_down * pred_down_y),
         edgecolor="#ff8b94",
         marker="o",
@@ -189,12 +192,13 @@ def load_model(config, dataset, name):
     return model
 
 
-def compute_picp(pred_mean_y, pred_up_y, pred_down_y, y, c_up, c_down, num_samples):
+def compute_picp(pred_mean_y, pred_up_y, pred_down_y, y, c_up, c_down):
     """
     Compute prediction interval coverage probabilty - fraction of data within the bounds.
     """
     covered = 0.0
 
+    num_samples = len(pred_mean_y)
     up = pred_mean_y + c_up * pred_up_y
     down = pred_mean_y - c_down * pred_down_y
     covered += ((down <= y) & (y <= up)).sum()
@@ -231,10 +235,10 @@ def compute_predictions(loader, models, config):
                 pred[i] = torch.cat((pred[i], result), 0)
         if y == None:
             y = data.y
-            comp = data.comp
+            # comp = data.comp
         else:
             y = torch.cat((y, data.y), 0)
-            comp = torch.cat((comp, data.comp), 0)
+            # comp = torch.cat((comp, data.comp), 0)
 
     return pred[0], pred[1], pred[2], y, comp
 
