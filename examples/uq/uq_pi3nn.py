@@ -141,10 +141,11 @@ def run_uncertainty(
         c_down[0],
     )
 
-    plot_uq(pred_mean, pred_up, pred_down, y, c_up[0], c_down[0], comp)
+    plot_uq_samples(pred_mean, pred_up, pred_down, y, c_up[0], c_down[0], comp)
+    plot_uq_intervals(pred_up, pred_down, c_up[0], c_down[0])
 
 
-def plot_uq(pred_mean, pred_up, pred_down, y, c_up, c_down, comp):
+def plot_uq_samples(pred_mean, pred_up, pred_down, y, c_up, c_down, comp):
     """
     Plot mean, upper, and lower predictions.
     """
@@ -177,6 +178,14 @@ def plot_uq(pred_mean, pred_up, pred_down, y, c_up, c_down, comp):
         facecolor="none",
     )
     plt.show()
+
+
+def plot_uq_intervals(up, down, c_up, c_down):
+    fig, ax = plt.subplots(1, 1)
+    arr = up.detach() * c_up - down.detach() * c_down
+    print(arr)
+    ax.hist(arr, bins=300)
+    plt.show()  # savefig("intervals.png")
 
 
 def load_model(config, dataset, name):
