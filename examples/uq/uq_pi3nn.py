@@ -185,8 +185,10 @@ def plot_uq_samples(pred_mean, pred_up, pred_down, y, c_up, c_down, comp):
 def plot_uq_intervals(up, down, c_up, c_down):
     fig, ax = plt.subplots(1, 1)
     arr = up.detach() * c_up - down.detach() * c_down
-    print(arr)
-    ax.hist(arr, bins=300)
+    hist, bins = np.histogram(arr, bins=300)
+    width = 0.7 * (bins[1] - bins[0])
+    center = (bins[:-1] + bins[1:]) / 2
+    plt.bar(center, hist, align="center", width=width)
     plt.show()  # savefig("intervals.png")
 
 
