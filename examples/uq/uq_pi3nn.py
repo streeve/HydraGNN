@@ -91,6 +91,7 @@ def run_uncertainty(
     down_name = out_name + "down"
     if retrain_up_down:
         # config["NeuralNetwork"]["Architecture"]["hidden_dim"] = 10
+        config["NeuralNetwork"]["Architecture"]["freeze_conv_layers"] = True
         model_up = train_model(up_loaders, up_name, config)
         save_model(model_up, up_name)
         model_down = train_model(down_loaders, down_name, config)
