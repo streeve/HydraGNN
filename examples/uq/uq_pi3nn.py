@@ -58,6 +58,7 @@ def run_uncertainty(
 
     out_name = "uq_"
     mean_name = out_name + "mean"
+    path = "./logs/uq/qm9_test1/"
     if retrain_mean:
         run_training(config_file_mean, train_loader, val_loader, test_loader, mean_name)
 
@@ -77,7 +78,7 @@ def run_uncertainty(
     mean_loaders = [train_loader, val_loader, test_loader]
     config = update_config(config, mean_loaders[0], mean_loaders[1], mean_loaders[2])
 
-    mean_model = load_model(config, mean_loaders[0].dataset, mean_name)
+    mean_model = load_model(config, mean_loaders[0].dataset, mean_name, path)
 
     load_existing_model(mean_model, mean_name)
 
@@ -97,8 +98,8 @@ def run_uncertainty(
         model_down = train_model(down_loaders, down_name, config)
         save_model(model_down, down_name)
     else:
-        model_up = load_model(config, up_loaders[0].dataset, up_name)
-        model_down = load_model(config, down_loaders[0].dataset, down_name)
+        model_up = load_model(config, up_loaders[0].dataset, up_name, path)
+        model_down = load_model(config, down_loaders[0].dataset, down_name, path)
 
     #### COMPUTE ALL 3 PREDICTIONS ON TRAINING DATA
     pred_mean, pred_up, pred_down, y, comp = compute_predictions(
@@ -189,7 +190,7 @@ def plot_uq_intervals(up, down, c_up, c_down):
     plt.show()  # savefig("intervals.png")
 
 
-def load_model(config, dataset, name):
+def load_model(config, dataset, name, path):
 
     model = create_model_config(
         config=config["NeuralNetwork"]["Architecture"],
@@ -198,7 +199,7 @@ def load_model(config, dataset, name):
 
     # model_name = model.__str__()
     output_name = name
-    load_existing_model(model, output_name)
+    load_existing_model(model, output_name, path)
     return model
 
 

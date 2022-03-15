@@ -46,7 +46,7 @@ train_loader, val_loader, test_loader = hydragnn.preprocess.create_dataloaders(
 
 run_uncertainty(
     "./examples/qm9/qm9.json",
-    "logs/uq_mean/config.json",
+    "logs/uq/qm9_test1/uq_mean/config.json",
     train_loader,
     val_loader,
     test_loader,
