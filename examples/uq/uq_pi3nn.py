@@ -58,7 +58,7 @@ def run_uncertainty(
 
     out_name = "uq_"
     mean_name = out_name + "mean"
-    path = "./logs/uq/qm9_test1/"
+    path = "./logs/"  # uq/qm9_unfrozen/"
     if retrain_mean:
         run_training(config_file_mean, train_loader, val_loader, test_loader, mean_name)
 
