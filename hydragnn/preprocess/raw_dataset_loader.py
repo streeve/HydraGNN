@@ -330,37 +330,32 @@ class RawDataLoader:
         for dataset in self.dataset_list:
             for data in dataset:
                 # find maximum and minimum values for graph level features
-                index_counter_y = 0
+                g_index_start = 0
                 for ifeat in range(num_graph_features):
+                    g_index_end = g_index_start + self.graph_feature_dim[ifeat]
                     self.minmax_graph_feature[0, ifeat] = min(
-                        min(
-                            data.y[
-                                index_counter_y : index_counter_y
-                                + self.graph_feature_dim[ifeat]
-                            ]
-                        ),
+                        min(data.y[g_index_start:g_index_end]),
                         self.minmax_graph_feature[0, ifeat],
                     )
                     self.minmax_graph_feature[1, ifeat] = max(
-                        max(
-                            data.y[
-                                index_counter_y : index_counter_y
-                                + self.graph_feature_dim[ifeat]
-                            ]
-                        ),
+                        max(data.y[g_index_start:g_index_end]),
                         self.minmax_graph_feature[1, ifeat],
                     )
-                    index_counter_y = index_counter_y + self.graph_feature_dim[ifeat]
+                    g_index_start = g_index_end
+
                 # find maximum and minimum values for node level features
+                n_index_start = 0
                 for ifeat in range(num_node_features):
+                    n_index_end = n_index_start + self.node_feature_dim[ifeat]
                     self.minmax_node_feature[0, ifeat] = np.minimum(
-                        np.amin(data.x[:, ifeat].numpy()),
+                        np.amin(data.x[:, n_index_start:n_index_end].numpy()),
                         self.minmax_node_feature[0, ifeat],
                     )
                     self.minmax_node_feature[1, ifeat] = np.maximum(
-                        np.amax(data.x[:, ifeat].numpy()),
+                        np.amax(data.x[:, n_index_start:n_index_end].numpy()),
                         self.minmax_node_feature[1, ifeat],
                     )
+                    n_index_start = n_index_end
         for dataset in self.dataset_list:
             for data in dataset:
                 index_counter_y = 0
