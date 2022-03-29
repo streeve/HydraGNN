@@ -14,9 +14,14 @@ import numpy as np
 import pickle
 import pathlib
 
+import csv
+
 import torch
 from torch_geometric.data import Data
 from torch import tensor
+
+from ase.io.cfg import read_cfg
+from ase.io import read
 
 from hydragnn.utils import iterate_tqdm
 
@@ -25,6 +30,16 @@ from hydragnn.utils import iterate_tqdm
 
 def tensor_divide(x1, x2):
     return torch.from_numpy(np.divide(x1, x2, out=np.zeros_like(x1), where=x2 != 0))
+
+
+def import_property_csv_file(csv_file):
+    dict_from_csv = {}
+
+    with open(csv_file, mode="r") as inp:
+        reader = csv.reader(inp)
+        dict_from_csv = {rows[0]: rows[1] for rows in reader}
+
+    return dict_from_csv
 
 
 class RawDataLoader:
@@ -89,14 +104,34 @@ class RawDataLoader:
                 raw_data_path
             )
 
-            dataset = [None] * len(all_files)
-            for fn, filename in enumerate(iterate_tqdm(all_files, 2)):
-                if filename == ".DS_Store":
+            dictionary_property = None
+
+            if self.data_format == "CIF":
+                property_path = raw_data_path + "/" + "formationenergy.csv"
+                dictionary_property = import_property_csv_file(property_path)
+
+            for name in os.listdir(raw_data_path):
+                if name == ".DS_Store":
                     continue
-                path = os.path.join(raw_data_path, filename)
-                with open(path, "r", encoding="utf-8") as f:
-                    lines = f.readlines()
-                dataset[fn] = self.__extract_features(lines)
+                # if the directory contains file, iterate over them
+                if os.path.isfile(os.path.join(raw_data_path, name)):
+                    data_object = self.__transform_input_to_data_object_base(
+                        filepath=os.path.join(raw_data_path, name),
+                        dictionary_property=dictionary_property,
+                    )
+                    if not isinstance(data_object, type(None)):
+                        dataset.append(data_object)
+                # if the directory contains subdirectories, explore their content
+                elif os.path.isdir(os.path.join(raw_data_path, name)):
+                    dir_name = os.path.join(raw_data_path, name)
+                    for subname in os.listdir(dir_name):
+                        if os.path.isfile(os.path.join(dir_name, subname)):
+                            data_object = self.__transform_input_to_data_object_base(
+                                filepath=os.path.join(dir_name, subname),
+                                dictionary_property=dictionary_property,
+                            )
+                            if not isinstance(data_object, type(None)):
+                                dataset.append(data_object)
 
             if self.data_format == "LSMS":
                 for idx, data_object in enumerate(dataset):
@@ -126,8 +161,124 @@ class RawDataLoader:
 
         return dataset
 
-    def __extract_features(self, lines: [str]):
-        """Transforms lines of strings read from the raw data file to Data object and returns it.
+    def __transform_input_to_data_object_base(self, filepath, dictionary_property):
+        if self.data_format == "LSMS" or self.data_format == "unit_test":
+            data_object = self.__transform_LSMS_input_to_data_object_base(
+                filepath=filepath
+            )
+        elif self.data_format == "CFG" or self.data_format == "CIF":
+            data_object = self.__transform_input_file_to_data_object_base(
+                filepath=filepath, dictionary_property=dictionary_property
+            )
+
+        return data_object
+
+    def __transform_input_file_to_data_object_base(
+        self, filepath, dictionary_property=None
+    ):
+        """Transforms lines of strings read from the raw data CIF file to Data object and returns it.
+
+        Parameters
+        ----------
+        lines:
+          content of data file with all the graph information
+        Returns
+        ----------
+        Data
+            Data object representing structure of a graph sample.
+        """
+
+        if filepath.endswith(".cfg"):
+
+            data_object = self.__transform_CFG_file_to_data_object(filepath)
+
+            return data_object
+
+        elif filepath.endswith(".cif"):
+
+            file_path_splitting = os.path.split(filepath)
+            filename_without_extension = os.path.splitext(file_path_splitting[1])[0]
+
+            if filename_without_extension in dictionary_property.keys():
+                data_object = self.__transform_CIF_file_to_data_object(
+                    filepath, dictionary_property
+                )
+                return data_object
+
+            else:
+                return None
+
+        else:
+            return None
+
+    def __transform_CFG_file_to_data_object(self, filepath):
+
+        # FIXME:
+        #  this still assumes bulk modulus is specific to the CFG format.
+        #  To deal with multiple files across formats, one should generalize this function
+        #  by moving the reading of the .bulk file in a standalone routine.
+        #  Morevoer, this approach assumes tha there is only one global feature to look at,
+        #  and that this global feature is specicially retrieveable in a file with the string *bulk* inside.
+
+        ase_object = read_cfg(filepath)
+
+        data_object = Data()
+
+        data_object.supercell_size = tensor(ase_object.cell.array).float()
+        data_object.pos = tensor(ase_object.arrays["positions"]).float()
+        proton_numbers = np.expand_dims(ase_object.arrays["numbers"], axis=1)
+        masses = np.expand_dims(ase_object.arrays["masses"], axis=1)
+        c_peratom = np.expand_dims(ase_object.arrays["c_peratom"], axis=1)
+        fx = np.expand_dims(ase_object.arrays["fx"], axis=1)
+        fy = np.expand_dims(ase_object.arrays["fy"], axis=1)
+        fz = np.expand_dims(ase_object.arrays["fz"], axis=1)
+        node_feature_matrix = np.concatenate(
+            (proton_numbers, masses, c_peratom, fx, fy, fz), axis=1
+        )
+        data_object.x = tensor(node_feature_matrix).float()
+
+        filename_without_extension = os.path.splitext(filepath)[0]
+
+        if os.path.exists(os.path.join(filename_without_extension + ".bulk")):
+            filename_bulk = os.path.join(filename_without_extension + ".bulk")
+            f = open(filename_bulk, "r", encoding="utf-8")
+            lines = f.readlines()
+            graph_feat = lines[0].split(None, 2)
+            g_feature = []
+            # collect graph features
+            for item in range(len(self.graph_feature_dim)):
+                for icomp in range(self.graph_feature_dim[item]):
+                    it_comp = self.graph_feature_col[item] + icomp
+                    g_feature.append(float(graph_feat[it_comp].strip()))
+            data_object.y = tensor(g_feature)
+
+        return data_object
+
+    def __transform_CIF_file_to_data_object(self, filepath, dictionary_property):
+
+        # FIXME:
+        #  this still assumes bulk modulus is specific to the CIG format.
+
+        # I do not succeed in making ase.io.cif.read_cfi work, so I use ase.io.read
+        ase_object = read(filepath)
+
+        file_path_splitting = os.path.split(filepath)
+        filename_without_extension = os.path.splitext(file_path_splitting[1])[0]
+
+        data_object = Data()
+        data_object.supercell_size = tensor(ase_object.cell.array).float()
+        data_object.pos = tensor(ase_object.arrays["positions"]).float()
+        proton_numbers = np.expand_dims(ase_object.arrays["numbers"], axis=1)
+        data_object.x = tensor(proton_numbers).float()
+
+        g_feature = []
+        g_feature.append(float(dictionary_property[filename_without_extension]))
+        data_object.y = tensor(g_feature)
+
+        return data_object
+
+    def __transform_LSMS_input_to_data_object_base(self, filepath):
+        """Transforms lines of strings read from the raw data LSMS file to Data object and returns it.
 
         Parameters
         ----------

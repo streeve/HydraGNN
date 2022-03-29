@@ -33,19 +33,40 @@ class SerializedDataLoader:
     Constructor
     """
 
-    def __init__(self, verbosity: int):
-        self.verbosity = verbosity
+    def __init__(self, config):
+        self.verbosity = config["Verbosity"]["level"]
+        self.node_feature_name = config["Dataset"]["node_features"]["name"]
+        self.node_feature_dim = config["Dataset"]["node_features"]["dim"]
+        self.node_feature_col = config["Dataset"]["node_features"]["column_index"]
+        self.graph_feature_name = config["Dataset"]["graph_features"]["name"]
+        self.graph_feature_dim = config["Dataset"]["graph_features"]["dim"]
+        self.graph_feature_col = config["Dataset"]["graph_features"]["column_index"]
+        self.rotational_invariance = config["Dataset"]["rotational_invariance"]
+        self.periodic_boundary_conditions = config["NeuralNetwork"]["Architecture"][
+            "periodic_boundary_conditions"
+        ]
+        self.edge_features = None
+        if "edge_features" in config["NeuralNetwork"]["Architecture"]:
+            self.edge_features = config["NeuralNetwork"]["Architecture"]
+        self.radius = config["NeuralNetwork"]["Architecture"]["radius"]
+        self.max_neighbours = config["NeuralNetwork"]["Architecture"]["max_neighbours"]
+        self.variables = config["NeuralNetwork"]["Variables_of_interest"]
+        self.variables_type = config["NeuralNetwork"]["Variables_of_interest"]["type"]
+        self.output_index = config["NeuralNetwork"]["Variables_of_interest"][
+            "output_index"
+        ]
+        self.input_node_features = config["NeuralNetwork"]["Variables_of_interest"][
+            "input_node_features"
+        ]
+        self.subsample_percentage = None
 
-    """A class used for loading existing structures from files that are lists of serialized structures.
-    Most of the class methods are hidden, because from outside a caller needs only to know about
-    load_serialized_data method.
-
-    Methods
-    -------
-    load_serialized_data(dataset_path: str, config: dict)
-        Loads the serialized structures data from specified path, computes new edges for the structures based on the maximum number of neighbours and radius. Additionally,
-        atom and structure features are updated.
-    """
+        # In situations where someone already provides the .pkl filed with data
+        # the asserts from raw_dataset_loader are not performed
+        # Therefore, we need to re-check consistency
+        assert len(self.node_feature_name) == len(self.node_feature_dim)
+        assert len(self.node_feature_name) == len(self.node_feature_col)
+        assert len(self.graph_feature_name) == len(self.graph_feature_dim)
+        assert len(self.graph_feature_name) == len(self.graph_feature_col)
 
     def load_serialized_data(self, dataset_path: str, config):
         """Loads the serialized structures data from specified path, computes new edges for the structures based on the maximum number of neighbours and radius. Additionally,
@@ -81,23 +102,19 @@ class SerializedDataLoader:
             compute_edges = get_radius_graph_config(
                 config["NeuralNetwork"]["Architecture"]
             )
-            compute_edge_lengths = Distance(norm=False, cat=True)
 
         dataset[:] = [compute_edges(data) for data in dataset]
 
         # edge lengths already added manually if using PBC.
-        if not config["NeuralNetwork"]["Architecture"]["periodic_boundary_conditions"]:
+        if self.edge_features is not None and "lengths" in self.edge_features:
             compute_edge_lengths = Distance(norm=False, cat=True)
             dataset[:] = [compute_edge_lengths(data) for data in dataset]
-
-        max_edge_length = torch.Tensor([float("-inf")])
-
-        for data in dataset:
-            max_edge_length = torch.max(max_edge_length, torch.max(data.edge_attr))
-
-        # Normalization of the edges
-        for data in dataset:
-            data.edge_attr = data.edge_attr / max_edge_length
+            for data in dataset:
+                max_edge_length = torch.Tensor([float("-inf")])
+                max_edge_length = torch.max(max_edge_length, torch.max(data.edge_attr))
+            # Normalization of the edges
+            for data in dataset:
+                data.edge_attr = data.edge_attr / max_edge_length
 
         # Move data to the device, if used. # FIXME: this does not respect the choice set by use_gpu
         device = get_device(verbosity_level=self.verbosity)
