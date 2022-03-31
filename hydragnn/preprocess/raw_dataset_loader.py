@@ -124,6 +124,8 @@ class RawDataLoader:
                 pickle.dump(self.minmax_graph_feature, f)
                 pickle.dump(dataset_normalized, f)
 
+        return dataset
+
     def __extract_features(self, lines: [str]):
         """Transforms lines of strings read from the raw data file to Data object and returns it.
 
@@ -136,9 +138,6 @@ class RawDataLoader:
         Data
             Data object representing structure of a graph sample.
         """
-
-        f = open(filepath, "r", encoding="utf-8")
-        lines = f.readlines()
 
         data_object = Data()
 

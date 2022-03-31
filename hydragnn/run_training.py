@@ -36,30 +36,37 @@ from hydragnn.models.create import create_model_config
 from hydragnn.train.train_validate_test import train_validate_test
 
 
-def run_training(config_file, train_loader, val_loader, test_loader, log_name=None):
+@singledispatch
+def run_training(config, train_loader, val_loader, test_loader, log_name=None):
+    raise TypeError("Input must be filename string or configuration dictionary.")
+
+
+@run_training.register
+def _(
+    config_file: str, train_loader, val_loader, test_loader, sampler_list, log_name=None
+):
 
     with open(config_file, "r") as f:
         config = json.load(f)
 
-    run_training(config, log_name)
+    run_training(config, train_loader, val_loader, test_loader, sampler_list, log_name)
 
 
 @run_training.register
-def _(config: dict, log_name=None):
+def _(config: dict, train_loader, val_loader, test_loader, sampler_list, log_name=None):
 
     try:
         os.environ["SERIALIZED_DATA_PATH"]
     except:
         os.environ["SERIALIZED_DATA_PATH"] = os.getcwd()
 
-    setup_log(get_log_name_config(config))
+    if log_name is None:
+        log_name = get_log_name_config(config)
+
+    setup_log(log_name)
     world_size, world_rank = setup_ddp()
 
     verbosity = config["Verbosity"]["level"]
-    train_loader, val_loader, test_loader, sampler_list = dataset_loading_and_splitting(
-        config=config
-    )
-
     config = update_config(config, train_loader, val_loader, test_loader)
 
     model = create_model_config(
@@ -73,8 +80,6 @@ def _(config: dict, log_name=None):
         optimizer, mode="min", factor=0.5, patience=5, min_lr=0.00001
     )
 
-    if log_name is None:
-        log_name = get_log_name_config(config)
     writer = get_summary_writer(log_name)
 
     if dist.is_initialized():
@@ -132,6 +137,8 @@ def _(config: dict, log_name=None):
 
     world_size, world_rank = setup_ddp()
 
-    train_loader, val_loader, test_loader = dataset_loading_and_splitting(config=config)
+    train_loader, val_loader, test_loader, sampler_list = dataset_loading_and_splitting(
+        config=config
+    )
 
-    run_training(config_file, train_loader, val_loader, test_loader, log_name)
+    run_training(config, train_loader, val_loader, test_loader, sampler_list, log_name)

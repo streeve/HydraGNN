@@ -10,6 +10,9 @@
 ##############################################################################
 
 import os
+import pickle
+from random import random
+from tqdm import tqdm
 
 import torch
 import torch.distributed as dist
@@ -28,7 +31,6 @@ from hydragnn.preprocess.compositional_data_splitting import (
 )
 from hydragnn.utils.distributed import get_comm_size_and_rank
 from hydragnn.utils.time_utils import Timer
-import pickle
 
 
 def dataset_loading_and_splitting(config: {}):
@@ -87,7 +89,7 @@ def create_dataloaders(trainset, valset, testset, batch_size):
 
 
 def split_dataset(
-    dataset: [],
+    dataset: list,
     perc_train: float,
     stratify_splitting: bool,
 ):
@@ -104,6 +106,36 @@ def split_dataset(
             dataset, perc_train
         )
 
+    return trainset, valset, testset
+
+
+def split_dataset_biased(
+    dataset: list,
+    perc_train: float,
+    split_func,
+):
+    """
+    Segment the dataset such that the testset samples a different space than training/validation
+    At the moment, the testset is not equal in size to the validation (it depends on the criterion for splitting)
+    """
+    perc_val = (1 - perc_train) / 2 + perc_train
+    data_size = len(dataset)
+    trainset = []
+    valset = []
+    testset = []
+    for d, data in enumerate(tqdm(dataset)):
+        # FIXME: need some lambda filter
+        rand = random()
+        if split_func(data):  # Is nitrogen in the molecule?
+            testset.append(dataset[d])
+        elif rand < perc_train:
+            trainset.append(dataset[d])
+        elif rand < perc_val:
+            valset.append(dataset[d])
+        else:
+            testset.append(dataset[d])
+
+    print(len(trainset), len(valset), len(testset))
     return trainset, valset, testset
 
 

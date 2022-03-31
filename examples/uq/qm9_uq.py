@@ -37,19 +37,26 @@ world_size, world_rank = hydragnn.utils.setup_ddp()
 dataset = torch_geometric.datasets.QM9(
     root="dataset/qm9", pre_transform=qm9_pre_transform  # , pre_filter=qm9_pre_filter
 )
-train, val, test = hydragnn.preprocess.split_dataset(
-    dataset, config["NeuralNetwork"]["Training"]["perc_train"], False
+split = lambda data: 7 in data.x
+train, val, test = hydragnn.preprocess.split_dataset_biased(
+    dataset, config["NeuralNetwork"]["Training"]["perc_train"], split
 )
-train_loader, val_loader, test_loader = hydragnn.preprocess.create_dataloaders(
+(
+    train_loader,
+    val_loader,
+    test_loader,
+    sampler_list,
+) = hydragnn.preprocess.create_dataloaders(
     train, val, test, config["NeuralNetwork"]["Training"]["batch_size"]
 )
 
 run_uncertainty(
     "./examples/qm9/qm9.json",
-    "logs/uq/qm9_test1/uq_mean/config.json",
+    "logs/uq_mean/config.json",
     train_loader,
     val_loader,
     test_loader,
-    False,
-    False,
+    sampler_list,
+    True,
+    True,
 )

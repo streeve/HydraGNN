@@ -54,7 +54,9 @@ def print_distributed(verbosity_level, *args):
 
 
 def iterate_tqdm(iterator, verbosity_level):
-    if (0 == dist.get_rank() and 2 == verbosity_level) or 4 == verbosity_level:
+    from .distributed import get_comm_size_and_rank
+
+    if (2 == verbosity_level) or 4 == verbosity_level:
         return tqdm(iterator)
     else:
         return iterator

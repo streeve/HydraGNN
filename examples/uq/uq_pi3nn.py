@@ -49,6 +49,7 @@ def run_uncertainty(
     train_loader,
     val_loader,
     test_loader,
+    sampler_list,
     retrain_mean=False,
     retrain_up_down=False,
 ):
@@ -59,8 +60,6 @@ def run_uncertainty(
     out_name = "uq_"
     mean_name = out_name + "mean"
     path = "./logs/"  # uq/qm9_unfrozen/"
-    if retrain_mean:
-        run_training(config_file_mean, train_loader, val_loader, test_loader, mean_name)
 
     config = {}
     with open(config_file_up_down, "r") as f:
@@ -78,73 +77,104 @@ def run_uncertainty(
     mean_loaders = [train_loader, val_loader, test_loader]
     config = update_config(config, mean_loaders[0], mean_loaders[1], mean_loaders[2])
 
-    mean_model = load_model(config, mean_loaders[0].dataset, mean_name, path)
-
-    load_existing_model(mean_model, mean_name)
-
-    mean_model = get_distributed_model(mean_model, verbosity)
+    if retrain_mean:
+        # run_training(config_file_mean, train_loader, val_loader, test_loader,sampler_list, mean_name)
+        mean_model = train_model(mean_loaders, sampler_list, mean_name, config)
+    else:
+        mean_model = load_model(config, mean_loaders[0].dataset, mean_name, path)
 
     #### CREATE THE DATASET LOADERS
-    up_loaders, down_loaders = create_loaders(mean_loaders, mean_model, config)
+    up_loaders, down_loaders, up_sampler, down_sampler = create_loaders(
+        mean_loaders, mean_model, config
+    )
 
     #### LOAD OR TRAIN UP & DOWN MODELS
     up_name = out_name + "up"
     down_name = out_name + "down"
+    print(retrain_up_down)
     if retrain_up_down:
         # config["NeuralNetwork"]["Architecture"]["hidden_dim"] = 10
         config["NeuralNetwork"]["Architecture"]["freeze_conv_layers"] = True
-        model_up = train_model(up_loaders, up_name, config)
+        config["NeuralNetwork"]["Architecture"]["set_large_bias"] = True
+        # config["NeuralNetwork"]["Architecture"]["num_epoch"] = 50
+        model_up = train_model(up_loaders, sampler_list, up_name, config)
         save_model(model_up, up_name)
-        model_down = train_model(down_loaders, down_name, config)
+        model_down = train_model(down_loaders, sampler_list, down_name, config)
         save_model(model_down, down_name)
     else:
         model_up = load_model(config, up_loaders[0].dataset, up_name, path)
         model_down = load_model(config, down_loaders[0].dataset, down_name, path)
 
     #### COMPUTE ALL 3 PREDICTIONS ON TRAINING DATA
-    pred_mean, pred_up, pred_down, y, comp = compute_predictions(
-        mean_loaders[0], (mean_model, model_up, model_down), config
-    )
+    (
+        pred_mean_train,
+        pred_up_train,
+        pred_down_train,
+        y_train,
+        comp_train,
+    ) = compute_predictions(mean_loaders[0], (mean_model, model_up, model_down), config)
+    (
+        pred_mean_test,
+        pred_up_test,
+        pred_down_test,
+        y_test,
+        comp_test,
+    ) = compute_predictions(mean_loaders[2], (mean_model, model_up, model_down), config)
 
     #### COMPUTE PREDICTION INTERVAL BOUNDS
-    yx = y.detach().numpy()
-    pred_mean_y = pred_mean.detach()
-    pred_up_y = pred_up.detach()
-    pred_down_y = pred_down.detach()
-    boundaryOptimizer = CL_boundary_optimizer(
-        yx,
-        pred_mean_y,
-        pred_up_y,
-        pred_down_y,
-        c_up0_ini=0.0,
-        c_up1_ini=100000.0,
-        c_down0_ini=0.0,
-        c_down1_ini=100000.0,
-        max_iter=100,
+    num_samples_train = len(mean_loaders[0].dataset)
+    c_up_train, c_down_train = compute_pi(
+        pred_mean_train, pred_up_train, pred_down_train, y_train, num_samples_train
     )
 
-    num_samples = len(mean_loaders[0].dataset)
-    num_outlier_list = [int(num_samples * (1 - x) / 2) for x in [0.9]]
-    c_up = [
-        boundaryOptimizer.optimize_up(outliers=x, verbose=0) for x in num_outlier_list
-    ]
-    c_down = [
-        boundaryOptimizer.optimize_down(outliers=x, verbose=0) for x in num_outlier_list
-    ]
-    print(c_up, c_down)
+    num_samples_test = len(mean_loaders[2].dataset)
+    c_up_test, c_down_test = compute_pi(
+        pred_mean_test, pred_up_test, pred_down_test, y_test, num_samples_test
+    )
 
     ### COMPUTE PREDICTION INTERVAL COVERAGE PROBABILITY
     compute_picp(
-        pred_mean_y,
-        pred_up_y,
-        pred_down_y,
-        y.detach(),
-        c_up[0],
-        c_down[0],
+        pred_mean_train,
+        pred_up_train,
+        pred_down_train,
+        y_train,
+        c_up_train[0],
+        c_down_train[0],
+    )
+    compute_picp(
+        pred_mean_test,
+        pred_up_test,
+        pred_down_test,
+        y_test,
+        c_up_test[0],
+        c_down_test[0],
     )
 
-    plot_uq_samples(pred_mean, pred_up, pred_down, y, c_up[0], c_down[0], comp)
-    plot_uq_intervals(pred_up, pred_down, c_up[0], c_down[0])
+    plot_uq_samples(
+        pred_mean_train,
+        pred_up_train,
+        pred_down_train,
+        y_train,
+        c_up_train[0],
+        c_down_train[0],
+        comp_train,
+    )
+    plot_uq_samples(
+        pred_mean_test,
+        pred_up_test,
+        pred_down_test,
+        y_test,
+        c_up_test[0],
+        c_down_test[0],
+        comp_test,
+    )
+
+    fig, ax = plt.subplots(1, 1)
+    plot_uq_intervals(
+        ax, pred_up_train, pred_down_train, c_up_train[0], c_down_train[0]
+    )
+    plot_uq_intervals(ax, pred_up_test, pred_down_test, c_up_test[0], c_down_test[0])
+    plt.show()
 
 
 def plot_uq_samples(pred_mean, pred_up, pred_down, y, c_up, c_down, comp):
@@ -153,28 +183,23 @@ def plot_uq_samples(pred_mean, pred_up, pred_down, y, c_up, c_down, comp):
     """
     c = ["b", "gray", "r"]
     fig, ax = plt.subplots(1, 1)
-    yx = y.detach().numpy()
-    pred_mean_y = pred_mean.detach()
-    pred_up_y = pred_up.detach()
-    pred_down_y = pred_down.detach()
-    # bar = torch.stack([c_down * pred_down_y, c_up * pred_up_y], 0).squeeze()
-    # ax.errorbar(comp, pred_mean_y, yerr=bar, marker="o")
-    ax.scatter(
-        yx, pred_mean_y, edgecolor="#005073", marker="o", facecolor="none"  # comp,
-    )
-    # ax.scatter(yx, pred_mean_y+pred_up_y, edgecolor=c[1], marker="o", facecolor="none")
-    # ax.scatter(yx, pred_mean_y-pred_down_y, edgecolor=c[2], marker="o", facecolor="none")
+
+    # bar = torch.stack([c_down * pred_down, c_up * pred_up], 0).squeeze()
+    # ax.errorbar(comp, pred_mean, yerr=bar, marker="o")
+    ax.scatter(y, pred_mean, edgecolor="#005073", marker="o", facecolor="none")  # comp,
+    # ax.scatter(y, pred_mean+pred_up, edgecolor=c[1], marker="o", facecolor="none")
+    # ax.scatter(y, pred_mean-pred_down, edgecolor=c[2], marker="o", facecolor="none")
 
     ax.scatter(
-        yx,  # comp,
-        (pred_mean_y + c_up * pred_up_y),
+        y,  # comp,
+        (pred_mean + c_up * pred_up),
         edgecolor="#a8e6cf",
         marker="o",
         facecolor="none",
     )
     ax.scatter(
-        yx,  # comp,
-        (pred_mean_y - c_down * pred_down_y),
+        y,  # comp,
+        (pred_mean - c_down * pred_down),
         edgecolor="#ff8b94",
         marker="o",
         facecolor="none",
@@ -182,14 +207,13 @@ def plot_uq_samples(pred_mean, pred_up, pred_down, y, c_up, c_down, comp):
     plt.show()
 
 
-def plot_uq_intervals(up, down, c_up, c_down):
-    fig, ax = plt.subplots(1, 1)
+def plot_uq_intervals(ax, up, down, c_up, c_down):
     arr = up.detach() * c_up + down.detach() * c_down
     hist, bins = np.histogram(arr, bins=300)
     width = 0.7 * (bins[1] - bins[0])
     center = (bins[:-1] + bins[1:]) / 2
-    plt.bar(center, hist, align="center", width=width)
-    plt.show()  # savefig("intervals.png")
+    ax.bar(center, hist, align="center", width=width)
+    # savefig("intervals.png")
 
 
 def load_model(config, dataset, name, path):
@@ -205,15 +229,39 @@ def load_model(config, dataset, name, path):
     return model
 
 
-def compute_picp(pred_mean_y, pred_up_y, pred_down_y, y, c_up, c_down):
+def compute_pi(pred_mean, pred_up, pred_down, y, num_samples):
+    boundaryOptimizer = CL_boundary_optimizer(
+        y.numpy(),
+        pred_mean,
+        pred_up,
+        pred_down,
+        c_up0_ini=0.0,
+        c_up1_ini=1000000.0,
+        c_down0_ini=0.0,
+        c_down1_ini=1000000.0,
+        max_iter=100,
+    )
+
+    num_outlier_list = [int(num_samples * (1 - x) / 2) for x in [0.9]]
+    c_up = [
+        boundaryOptimizer.optimize_up(outliers=x, verbose=0) for x in num_outlier_list
+    ]
+    c_down = [
+        boundaryOptimizer.optimize_down(outliers=x, verbose=0) for x in num_outlier_list
+    ]
+    print(c_up, c_down)
+    return c_up, c_down
+
+
+def compute_picp(pred_mean, pred_up, pred_down, y, c_up, c_down):
     """
     Compute prediction interval coverage probabilty - fraction of data within the bounds.
     """
     covered = 0.0
 
-    num_samples = len(pred_mean_y)
-    up = pred_mean_y + c_up * pred_up_y
-    down = pred_mean_y - c_down * pred_down_y
+    num_samples = len(pred_mean)
+    up = pred_mean + c_up * pred_up
+    down = pred_mean - c_down * pred_down
     covered += ((down <= y) & (y <= up)).sum()
     print(
         "COVERED IN PI:",
@@ -253,7 +301,7 @@ def compute_predictions(loader, models, config):
             y = torch.cat((y, data.y), 0)
             # comp = torch.cat((comp, data.comp), 0)
 
-    return pred[0], pred[1], pred[2], y, comp
+    return pred[0].detach(), pred[1].detach(), pred[2].detach(), y.detach(), comp
 
 
 ## NOTE: with MPI, the total dataset (before DDP splitting) should be used to create up and down, then re-split using DDP.
@@ -307,6 +355,8 @@ def create_loaders(loaders, model, config):
         ## The code below creates the loaders on the LOCAL up and down samples, which is probably wrong.
         ## We should add a mechanism (either a gather-type communication, or a file write and read) to
         ## make the GLOBAL datasets visible in each GPU.
+        up_sampler = []
+        down_sampler = []
         if dist.is_initialized():
             up_sampler = torch.utils.data.distributed.DistributedSampler(up)
             down_sampler = torch.utils.data.distributed.DistributedSampler(down)
@@ -324,10 +374,10 @@ def create_loaders(loaders, model, config):
         up_loaders.append(up_loader)
         down_loaders.append(down_loader)
 
-    return up_loaders, down_loaders
+    return up_loaders, down_loaders, up_sampler, down_sampler
 
 
-def train_model(loaders, output_name, config):
+def train_model(loaders, sampler_list, output_name, config):
     """
     Train a model on the upper or lower dataset.
     """
@@ -355,6 +405,7 @@ def train_model(loaders, output_name, config):
         loaders[0],
         loaders[1],
         loaders[2],
+        sampler_list,
         writer,
         scheduler,
         config["NeuralNetwork"],
