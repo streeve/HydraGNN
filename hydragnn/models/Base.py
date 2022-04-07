@@ -115,7 +115,9 @@ class Base(Module):
             # FIXME: we only currently enable this for graph outputs.
             if type == "graph":
                 # Set the bias of the last linear layer to a large value (UQ)
-                head[-1].bias.data.fill_(3e3)
+                # Not the actual last layer because of ReLU added for UQ residuals
+                bias = head[-1].bias[0]
+                head[-1].bias.data.fill_(bias * 10)
 
     def _init_node_conv(self):
         # *******convolutional layers for node level predictions*******#
@@ -183,6 +185,9 @@ class Base(Module):
                         self.head_dims[ihead] + self.ilossweights_nll * 1,
                     )
                 )
+                # FIXME: make this optional
+                # denselayers.append(ReLU())
+                ##########################
                 head_NN = Sequential(*denselayers)
             elif self.head_type[ihead] == "node":
                 self.node_NN_type = self.config_heads["node"]["type"]

@@ -295,7 +295,7 @@ class Visualizer:
             ax = axs[1]
             hist1d, bin_edges = np.histogram(
                 np.array(predicted_values) - np.array(true_values),
-                bins=40,
+                bins=int(np.sqrt(len(predicted_values))),
                 density=True,
             )
             ax.plot(0.5 * (bin_edges[:-1] + bin_edges[1:]), hist1d, "ro")

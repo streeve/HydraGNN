@@ -118,16 +118,44 @@ def split_dataset_biased(
     Segment the dataset such that the testset samples a different space than training/validation
     At the moment, the testset is not equal in size to the validation (it depends on the criterion for splitting)
     """
+    # perc_val = (1 - perc_train) / 2 + perc_train
+    perc_val = (1 - perc_train) + perc_train
+    data_size = len(dataset)
+    trainset = []
+    valset = []
+    testset = []
+    for d, data in enumerate(tqdm(dataset)):
+        rand = random()
+        if split_func(data):
+            testset.append(dataset[d])
+        elif rand < perc_train:
+            trainset.append(dataset[d])
+        elif rand < perc_val:
+            valset.append(dataset[d])
+        # else:
+        #    testset.append(dataset[d])
+
+    print(len(trainset), len(valset), len(testset))
+    return trainset, valset, testset
+
+
+def split_dataset_ignore(
+    dataset: list,
+    perc_train: float,
+    ignore_func,
+):
+    """
+    Split data and ignore some portion, using criterion passed.
+    """
     perc_val = (1 - perc_train) / 2 + perc_train
     data_size = len(dataset)
     trainset = []
     valset = []
     testset = []
     for d, data in enumerate(tqdm(dataset)):
-        # FIXME: need some lambda filter
         rand = random()
-        if split_func(data):  # Is nitrogen in the molecule?
-            testset.append(dataset[d])
+        if ignore_func(data):
+            continue
         elif rand < perc_train:
             trainset.append(dataset[d])
         elif rand < perc_val:

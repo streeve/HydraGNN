@@ -45,7 +45,7 @@ from pi3nn.Optimizations import CL_boundary_optimizer
 
 def run_uncertainty(
     config_file_mean,
-    config_file_up_down,
+    path,
     train_loader,
     val_loader,
     test_loader,
@@ -59,11 +59,6 @@ def run_uncertainty(
 
     out_name = "uq_"
     mean_name = out_name + "mean"
-    path = "./logs/"  # uq/qm9_unfrozen/"
-
-    config = {}
-    with open(config_file_up_down, "r") as f:
-        config = json.load(f)
 
     try:
         os.environ["SERIALIZED_DATA_PATH"]
@@ -71,17 +66,24 @@ def run_uncertainty(
         os.environ["SERIALIZED_DATA_PATH"] = os.getcwd()
 
     world_size, world_rank = setup_ddp()
-    verbosity = config["Verbosity"]["level"]
 
     #### LOAD THE ORIGINAL DATA LOADERS AND THE TRAINED MEAN MODEL
     mean_loaders = [train_loader, val_loader, test_loader]
-    config = update_config(config, mean_loaders[0], mean_loaders[1], mean_loaders[2])
 
+    with open(config_file_mean, "r") as f:
+        config_mean = json.load(f)
+    config_mean = update_config(
+        config_mean, mean_loaders[0], mean_loaders[1], mean_loaders[2]
+    )
     if retrain_mean:
-        # run_training(config_file_mean, train_loader, val_loader, test_loader,sampler_list, mean_name)
-        mean_model = train_model(mean_loaders, sampler_list, mean_name, config)
-    else:
-        mean_model = load_model(config, mean_loaders[0].dataset, mean_name, path)
+        run_training(
+            config_mean, train_loader, val_loader, test_loader, sampler_list, mean_name
+        )
+    mean_model = load_model(config_mean, mean_loaders[0].dataset, mean_name, path)
+
+    config_file_up_down = os.path.join(path, mean_name, "config.json")
+    with open(config_file_up_down, "r") as f:
+        config = json.load(f)
 
     #### CREATE THE DATASET LOADERS
     up_loaders, down_loaders, up_sampler, down_sampler = create_loaders(
@@ -91,11 +93,10 @@ def run_uncertainty(
     #### LOAD OR TRAIN UP & DOWN MODELS
     up_name = out_name + "up"
     down_name = out_name + "down"
-    print(retrain_up_down)
     if retrain_up_down:
         # config["NeuralNetwork"]["Architecture"]["hidden_dim"] = 10
         config["NeuralNetwork"]["Architecture"]["freeze_conv_layers"] = True
-        config["NeuralNetwork"]["Architecture"]["set_large_bias"] = True
+        config["NeuralNetwork"]["Architecture"]["set_large_bias"] = False
         # config["NeuralNetwork"]["Architecture"]["num_epoch"] = 50
         model_up = train_model(up_loaders, sampler_list, up_name, config)
         save_model(model_up, up_name)
@@ -113,23 +114,19 @@ def run_uncertainty(
         y_train,
         comp_train,
     ) = compute_predictions(mean_loaders[0], (mean_model, model_up, model_down), config)
-    (
-        pred_mean_test,
-        pred_up_test,
-        pred_down_test,
-        y_test,
-        comp_test,
-    ) = compute_predictions(mean_loaders[2], (mean_model, model_up, model_down), config)
 
     #### COMPUTE PREDICTION INTERVAL BOUNDS
-    num_samples_train = len(mean_loaders[0].dataset)
+    num_train_mean = len(mean_loaders[0].dataset)
+    num_train_up = len(up_loaders[0].dataset)
+    num_train_down = len(down_loaders[0].dataset)
+    num_train = num_train_mean + num_train_up + num_train_down
     c_up_train, c_down_train = compute_pi(
-        pred_mean_train, pred_up_train, pred_down_train, y_train, num_samples_train
-    )
-
-    num_samples_test = len(mean_loaders[2].dataset)
-    c_up_test, c_down_test = compute_pi(
-        pred_mean_test, pred_up_test, pred_down_test, y_test, num_samples_test
+        pred_mean_train,
+        pred_up_train,
+        pred_down_train,
+        y_train,
+        num_train_up,
+        num_train_down,
     )
 
     ### COMPUTE PREDICTION INTERVAL COVERAGE PROBABILITY
@@ -141,16 +138,10 @@ def run_uncertainty(
         c_up_train[0],
         c_down_train[0],
     )
-    compute_picp(
-        pred_mean_test,
-        pred_up_test,
-        pred_down_test,
-        y_test,
-        c_up_test[0],
-        c_down_test[0],
-    )
 
+    fig1, ax1 = plt.subplots(1, 1)
     plot_uq_samples(
+        ax1,
         pred_mean_train,
         pred_up_train,
         pred_down_train,
@@ -159,61 +150,112 @@ def run_uncertainty(
         c_down_train[0],
         comp_train,
     )
-    plot_uq_samples(
-        pred_mean_test,
-        pred_up_test,
-        pred_down_test,
-        y_test,
-        c_up_test[0],
-        c_down_test[0],
-        comp_test,
-    )
+    fig1.tight_layout()
+    plt.show()
 
-    fig, ax = plt.subplots(1, 1)
-    plot_uq_intervals(
-        ax, pred_up_train, pred_down_train, c_up_train[0], c_down_train[0]
+    # Repeat for test set
+    num_test_mean = len(mean_loaders[2].dataset)
+    num_test_up = len(up_loaders[2].dataset)
+    num_test_down = len(down_loaders[2].dataset)
+    num_test = num_test_mean + num_test_up + num_test_down
+    if num_test > 0:
+        (
+            pred_mean_test,
+            pred_up_test,
+            pred_down_test,
+            y_test,
+            comp_test,
+        ) = compute_predictions(
+            mean_loaders[2], (mean_model, model_up, model_down), config
+        )
+        c_up_test, c_down_test = compute_pi(
+            pred_mean_test, pred_up_test, pred_down_test, y_test, num_test, num_test
+        )
+        compute_picp(
+            pred_mean_test,
+            pred_up_test,
+            pred_down_test,
+            y_test,
+            c_up_test[0],
+            c_down_test[0],
+        )
+        fig, ax2 = plt.subplots(1, 1)
+        plot_uq_samples(
+            ax2,
+            pred_mean_test,
+            pred_up_test,
+            pred_down_test,
+            y_test,
+            c_up_test[0],
+            c_down_test[0],
+            comp_test,
+        )
+        plt.show()
+
+    fig3, ax3 = plt.subplots(1, 1)
+    # plot_uq_intervals(ax3, pred_up_train, pred_down_train, c_up_train[0], c_down_train[0], "train")
+    plot_split_uq_intervals(
+        ax3, pred_up_train, pred_down_train, c_up_train[0], c_down_train[0], comp_train
     )
-    plot_uq_intervals(ax, pred_up_test, pred_down_test, c_up_test[0], c_down_test[0])
+    if num_test > 0:
+        plot_uq_intervals(
+            ax3, pred_up_test, pred_down_test, c_up_test[0], c_down_test[0], "test"
+        )
+    ax3.legend()
+    fig3.tight_layout()
     plt.show()
 
 
-def plot_uq_samples(pred_mean, pred_up, pred_down, y, c_up, c_down, comp):
+def plot_uq_samples(ax, pred_mean, pred_up, pred_down, y, c_up, c_down, comp):
     """
     Plot mean, upper, and lower predictions.
     """
-    c = ["b", "gray", "r"]
-    fig, ax = plt.subplots(1, 1)
 
     # bar = torch.stack([c_down * pred_down, c_up * pred_up], 0).squeeze()
     # ax.errorbar(comp, pred_mean, yerr=bar, marker="o")
-    ax.scatter(y, pred_mean, edgecolor="#005073", marker="o", facecolor="none")  # comp,
+    ax.scatter(comp, pred_mean, edgecolor="#005073", marker="o", facecolor="none")
     # ax.scatter(y, pred_mean+pred_up, edgecolor=c[1], marker="o", facecolor="none")
     # ax.scatter(y, pred_mean-pred_down, edgecolor=c[2], marker="o", facecolor="none")
 
     ax.scatter(
-        y,  # comp,
+        comp,
         (pred_mean + c_up * pred_up),
         edgecolor="#a8e6cf",
         marker="o",
         facecolor="none",
     )
     ax.scatter(
-        y,  # comp,
+        comp,
         (pred_mean - c_down * pred_down),
         edgecolor="#ff8b94",
         marker="o",
         facecolor="none",
     )
-    plt.show()
+    # ax.set_xlim([-0.05, 1.05])
+    # ax.set_ylim([-0.10, 1.0])
+    # ax.set_xlabel("Atomic fraction (Fe)")
+    # ax.set_ylabel("Predicted enthalpy (normalized)")
 
 
-def plot_uq_intervals(ax, up, down, c_up, c_down):
+def plot_uq_intervals(ax, up, down, c_up, c_down, label):
     arr = up.detach() * c_up + down.detach() * c_down
-    hist, bins = np.histogram(arr, bins=300)
-    width = 0.7 * (bins[1] - bins[0])
+    nbins = int(np.sqrt(len(arr)))
+    hist, bins = np.histogram(arr, bins=nbins)
+    width = bins[1] - bins[0]
     center = (bins[:-1] + bins[1:]) / 2
-    ax.bar(center, hist, align="center", width=width)
+    ax.bar(center, hist, align="center", width=width, label=label)
     # savefig("intervals.png")
+    # np.savetxt(label+".txt", np.column_stack((center, hist)))
+
+
+def plot_split_uq_intervals(ax, up, down, c_up, c_down, comp, split=0.8):
+    train_up = up[comp < split]
+    train_down = down[comp < split]
+    ax.scatter(comp, up.detach() * c_up + down.detach() * c_down, label="train")
+    # plot_uq_intervals(ax, train_up, train_down, c_up, c_down, "train")
+    test_up = up[comp > split]
+    test_down = down[comp > split]
+    # plot_uq_intervals(ax, test_up, test_down, c_up, c_down, "test")
 
 
 def load_model(config, dataset, name, path):
@@ -229,23 +271,24 @@ def load_model(config, dataset, name, path):
     return model
 
 
-def compute_pi(pred_mean, pred_up, pred_down, y, num_samples):
+def compute_pi(pred_mean, pred_up, pred_down, y, num_samples_up, num_samples_down):
     boundaryOptimizer = CL_boundary_optimizer(
         y.numpy(),
         pred_mean,
         pred_up,
         pred_down,
         c_up0_ini=0.0,
-        c_up1_ini=1000000.0,
+        c_up1_ini=100.0,
         c_down0_ini=0.0,
-        c_down1_ini=1000000.0,
+        c_down1_ini=100.0,
         max_iter=100,
     )
 
-    num_outlier_list = [int(num_samples * (1 - x) / 2) for x in [0.9]]
+    num_outlier_list = [int(num_samples_up * (1 - x) / 2) for x in [0.90]]
     c_up = [
         boundaryOptimizer.optimize_up(outliers=x, verbose=0) for x in num_outlier_list
     ]
+    num_outlier_list = [int(num_samples_down * (1 - x) / 2) for x in [0.90]]
     c_down = [
         boundaryOptimizer.optimize_down(outliers=x, verbose=0) for x in num_outlier_list
     ]
@@ -289,17 +332,19 @@ def compute_predictions(loader, models, config):
     for data in iterate_tqdm(loader, verbosity):
         data = data.to(device)
         for i, m in enumerate(models):
-            result = models[i](data)[0]
+            result = m(data)[0]
             if pred[i] == None:
                 pred[i] = result
             else:
                 pred[i] = torch.cat((pred[i], result), 0)
         if y == None:
             y = data.y
-            # comp = data.comp
+            # if comp == None and hasattr(data, 'comp'):
+            comp = data.comp
         else:
             y = torch.cat((y, data.y), 0)
-            # comp = torch.cat((comp, data.comp), 0)
+            # if hasattr(data, 'comp'):
+            comp = torch.cat((comp, data.comp), 0)
 
     return pred[0].detach(), pred[1].detach(), pred[2].detach(), y.detach(), comp
 
@@ -412,5 +457,7 @@ def train_model(loaders, sampler_list, output_name, config):
         output_name,
         config["Verbosity"]["level"],
     )
+
+    save_model(new_model, output_name)
 
     return new_model

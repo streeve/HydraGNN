@@ -151,17 +151,10 @@ class RawDataLoader:
         data_object.y = tensor(g_feature, dtype=torch.float32)
 
         nodes = np.loadtxt(lines[1:])
-        node_feature_matrix = []
-
-        node_feature = []
-        for item in range(len(self.node_feature_dim)):
-            for icomp in range(self.node_feature_dim[item]):
-                it_comp = self.node_feature_col[item] + icomp
-                node_feature.append(nodes[:, it_comp])
-        node_feature_matrix.append(node_feature)
+        node_features = nodes[:, self.node_feature_col]
 
         data_object.pos = tensor(nodes[:, 2:5], dtype=torch.float32)
-        data_object.x = tensor(node_feature_matrix, dtype=torch.float32)
+        data_object.x = tensor(node_features, dtype=torch.float32)
 
         elements, counts = np.unique(nodes[:, 0], return_counts=True)
         data_object.comp = tensor(counts[0] / np.shape(nodes)[0], dtype=torch.float32)

@@ -2,7 +2,9 @@ import os, json
 from torch_geometric.transforms import Distance
 from hydragnn.preprocess import (
     RawDataLoader,
+    split_dataset,
     split_dataset_biased,
+    split_dataset_ignore,
     create_dataloaders,
     update_predicted_values,
     get_radius_graph_config,
@@ -34,20 +36,28 @@ for data in dataset:
         data,
     )
     compute_edges(data)
-    # data.x = data.x[:, feature_indices]#.squeeze()
+    data.x = data.x[:, feature_indices]
 
 split = lambda data: data.comp > 0.8
-train, val, test = split_dataset_biased(
-    dataset, config["NeuralNetwork"]["Training"]["perc_train"], split
+# train, val, test = split_dataset_biased(
+#    dataset, 1.0, #config["NeuralNetwork"]["Training"]["perc_train"],
+#    split)
+# train, val, test = split_dataset_ignore(
+#    dataset, config["NeuralNetwork"]["Training"]["perc_train"],
+#    #1.0,
+#    split)
+train, val, test = split_dataset(
+    dataset, config["NeuralNetwork"]["Training"]["perc_train"], True
 )
+# 1.0, False)
+
 train_loader, val_loader, test_loader, sampler_list = create_dataloaders(
     train, val, test, config["NeuralNetwork"]["Training"]["batch_size"]
 )
-config = update_config(config, train_loader, val_loader, test_loader)
 
 run_uncertainty(
-    config,
-    "logs/uq_mean/config.json",
+    config_file,  # _file?
+    "logs/",  # fept_uq/3_",
     train_loader,
     val_loader,
     test_loader,
