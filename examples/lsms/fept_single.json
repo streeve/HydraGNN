@@ -4,7 +4,7 @@
     },
     "Dataset": {
         "name": "FePt_32atoms",
-        "path": {"total": "/Users/5t2/Downloads/FePt_gibbs_energy"},
+        "path": {"total": "/Users/5t2/Downloads/FePt_histogram_cutoff"},
         "format": "LSMS",
         "compositional_stratified_splitting": true,
         "node_features": {

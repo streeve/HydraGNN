@@ -179,7 +179,7 @@ def run_uncertainty(
             c_up_test[0],
             c_down_test[0],
         )
-        fig, ax2 = plt.subplots(1, 1)
+        fig2, ax2 = plt.subplots(1, 1)
         plot_uq_samples(
             ax2,
             pred_mean_test,
@@ -190,17 +190,18 @@ def run_uncertainty(
             c_down_test[0],
             comp_test,
         )
+        fig2.tight_layout()
         plt.show()
 
     fig3, ax3 = plt.subplots(1, 1)
-    # plot_uq_intervals(ax3, pred_up_train, pred_down_train, c_up_train[0], c_down_train[0], "train")
-    plot_split_uq_intervals(
-        ax3, pred_up_train, pred_down_train, c_up_train[0], c_down_train[0], comp_train
-    )
+    # plot_split_uq_intervals(ax3, pred_up_train, pred_down_train, c_up_train[0], c_down_train[0], comp_train)
     if num_test > 0:
         plot_uq_intervals(
             ax3, pred_up_test, pred_down_test, c_up_test[0], c_down_test[0], "test"
         )
+    plot_uq_intervals(
+        ax3, pred_up_train, pred_down_train, c_up_train[0], c_down_train[0], "train"
+    )
     ax3.legend()
     fig3.tight_layout()
     plt.show()
@@ -231,31 +232,33 @@ def plot_uq_samples(ax, pred_mean, pred_up, pred_down, y, c_up, c_down, comp):
         marker="o",
         facecolor="none",
     )
-    # ax.set_xlim([-0.05, 1.05])
-    # ax.set_ylim([-0.10, 1.0])
-    # ax.set_xlabel("Atomic fraction (Fe)")
-    # ax.set_ylabel("Predicted enthalpy (normalized)")
+    ax.set_xlim([-0.05, 1.05])
+    ax.set_ylim([-0.10, 1.25])
+    ax.set_xlabel("Atomic fraction (Fe)")
+    ax.set_ylabel("Predicted enthalpy (normalized)")
 
 
 def plot_uq_intervals(ax, up, down, c_up, c_down, label):
     arr = up.detach() * c_up + down.detach() * c_down
     nbins = int(np.sqrt(len(arr)))
-    hist, bins = np.histogram(arr, bins=nbins)
+    hist, bins = np.histogram(arr, bins=nbins, density=True)
     width = bins[1] - bins[0]
     center = (bins[:-1] + bins[1:]) / 2
     ax.bar(center, hist, align="center", width=width, label=label)
     # savefig("intervals.png")
     # np.savetxt(label+".txt", np.column_stack((center, hist)))
+    ax.set_xlabel("Prediction interval width")
+    ax.set_ylabel("Probability density")
 
 
 def plot_split_uq_intervals(ax, up, down, c_up, c_down, comp, split=0.8):
     train_up = up[comp < split]
     train_down = down[comp < split]
-    ax.scatter(comp, up.detach() * c_up + down.detach() * c_down, label="train")
-    # plot_uq_intervals(ax, train_up, train_down, c_up, c_down, "train")
+    # ax.scatter(comp, up.detach() * c_up + down.detach() * c_down, label="train")
+    plot_uq_intervals(ax, train_up, train_down, c_up, c_down, "train")
     test_up = up[comp > split]
     test_down = down[comp > split]
-    # plot_uq_intervals(ax, test_up, test_down, c_up, c_down, "test")
+    plot_uq_intervals(ax, test_up, test_down, c_up, c_down, "test")
 
 
 def load_model(config, dataset, name, path):
