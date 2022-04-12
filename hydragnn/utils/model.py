@@ -31,11 +31,13 @@ def get_model_or_module(model):
         return model
 
 
-def save_model(model, name, path="./logs/"):
+def save_model(model, name, path=None):
+    if path is None:
+        path = "./logs/" + name
     _, world_rank = get_comm_size_and_rank()
     if world_rank == 0:
         model = get_model_or_module(model)
-        path_name = os.path.join(path, name, name + ".pk")
+        path_name = os.path.join(path, name + ".pk")
         torch.save(model.state_dict(), path_name)
 
 
@@ -46,14 +48,18 @@ def get_summary_writer(name, path="./logs/"):
         writer = SummaryWriter(path_name)
 
 
-def load_existing_model_config(model, config, path="./logs/"):
+def load_existing_model_config(model, config, path=None):
     if "continue" in config and config["continue"]:
         model_name = config["startfrom"]
+        if path is None:
+            path = "./logs/" + model_name
         load_existing_model(model, model_name, path)
 
 
-def load_existing_model(model, model_name, path="./logs/"):
-    path_name = os.path.join(path, model_name, model_name + ".pk")
+def load_existing_model(model, model_name, path=None):
+    if path is None:
+        path = "./logs/" + name
+    path_name = os.path.join(path, model_name + ".pk")
     state_dict = torch.load(path_name, map_location="cpu")
 
     if is_model_distributed(model):
