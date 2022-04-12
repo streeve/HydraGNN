@@ -101,7 +101,7 @@ def run_uncertainty(
     if retrain_up_down:
         # config["NeuralNetwork"]["Architecture"]["hidden_dim"] = 10
         config["NeuralNetwork"]["Architecture"]["freeze_conv_layers"] = True
-        config["NeuralNetwork"]["Architecture"]["set_large_bias"] = False
+        config["NeuralNetwork"]["Architecture"]["set_large_bias"] = True
         # config["NeuralNetwork"]["Architecture"]["num_epoch"] = 50
         model_up = train_model(up_loaders, sampler_list, up_name, config)
         # save_model(model_up, up_name, "logs/"+up_name)
@@ -219,28 +219,30 @@ def plot_uq_samples(ax, pred_mean, pred_up, pred_down, y, c_up, c_down, comp):
 
     # bar = torch.stack([c_down * pred_down, c_up * pred_up], 0).squeeze()
     # ax.errorbar(comp, pred_mean, yerr=bar, marker="o")
-    ax.scatter(comp, pred_mean, edgecolor="#005073", marker="o", facecolor="none")
+    ax.scatter(y, pred_mean, edgecolor="#005073", marker="o", facecolor="none")
     # ax.scatter(y, pred_mean+pred_up, edgecolor=c[1], marker="o", facecolor="none")
     # ax.scatter(y, pred_mean-pred_down, edgecolor=c[2], marker="o", facecolor="none")
 
     ax.scatter(
-        comp,
+        y,
         (pred_mean + c_up * pred_up),
         edgecolor="#a8e6cf",
         marker="o",
         facecolor="none",
     )
     ax.scatter(
-        comp,
+        y,
         (pred_mean - c_down * pred_down),
         edgecolor="#ff8b94",
         marker="o",
         facecolor="none",
     )
-    ax.set_xlim([-0.05, 1.05])
-    ax.set_ylim([-0.10, 1.25])
-    ax.set_xlabel("Atomic fraction (Fe)")
-    ax.set_ylabel("Predicted enthalpy (normalized)")
+    # ax.set_xlim([-0.05, 1.05])
+    # ax.set_ylim([-0.10, 1.25])
+    # ax.set_xlabel("Atomic fraction (Fe)")
+    # ax.set_ylabel("Predicted enthalpy (normalized)")
+    ax.set_xlabel("DFT free energy")
+    ax.set_ylabel("GCNN free energy")
 
 
 def plot_uq_intervals(ax, up, down, c_up, c_down, label):
@@ -347,12 +349,12 @@ def compute_predictions(loader, models, config):
                 pred[i] = torch.cat((pred[i], result), 0)
         if y == None:
             y = data.y
-            # if comp == None and hasattr(data, 'comp'):
-            comp = data.comp
+            if comp == None and hasattr(data, "comp"):
+                comp = data.comp
         else:
             y = torch.cat((y, data.y), 0)
-            # if hasattr(data, 'comp'):
-            comp = torch.cat((comp, data.comp), 0)
+            if hasattr(data, "comp"):
+                comp = torch.cat((comp, data.comp), 0)
 
     return pred[0].detach(), pred[1].detach(), pred[2].detach(), y.detach(), comp
 
@@ -466,6 +468,6 @@ def train_model(loaders, sampler_list, output_name, config):
         config["Verbosity"]["level"],
     )
 
-    save_model(new_model, output_name)
+    save_model(new_model, output_name, "logs/" + output_name)
 
     return new_model
