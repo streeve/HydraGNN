@@ -11,13 +11,14 @@
 
 from tqdm import tqdm
 import numpy as np
+from copy import deepcopy
 
 import torch
 
 from hydragnn.preprocess.serialized_dataset_loader import SerializedDataLoader
 from hydragnn.postprocess.postprocess import output_denormalize
 from hydragnn.postprocess.visualizer import Visualizer
-from hydragnn.utils.model import get_model_or_module
+from hydragnn.utils.model import get_model_or_module, save_model
 from hydragnn.utils.print_utils import print_distributed, iterate_tqdm
 from hydragnn.utils.time_utils import Timer
 from hydragnn.utils.profile import Profiler
@@ -42,7 +43,7 @@ def train_validate_test(
     model_with_config_name,
     verbosity=0,
     plot_init_solution=True,
-    plot_hist_solution=False,
+    plot_hist_solution=True,
 ):
     num_epoch = config["Training"]["num_epoch"]
     # total loss tracking for train/vali/test
@@ -89,6 +90,7 @@ def train_validate_test(
     timer = Timer("train_validate_test")
     timer.start()
 
+    best_rmse = 1e20
     for epoch in range(0, num_epoch):
         profiler.set_current_epoch(epoch)
         for sampler in sampler_list:
@@ -134,11 +136,19 @@ def train_validate_test(
                 iepoch=epoch,
             )
 
+        if test_rmse < best_rmse:
+            best_rmse = test_rmse
+            best_model = deepcopy(model)
+
     timer.stop()
+
+    save_model(
+        best_model, model_with_config_name + "_best", "logs/" + model_with_config_name
+    )
 
     # At the end of training phase, do the one test run for visualizer to get latest predictions
     test_rmse, test_taskserr, true_values, predicted_values = test(
-        test_loader, model, verbosity
+        test_loader, best_model, verbosity
     )
 
     ##output predictions with unit/not normalized
