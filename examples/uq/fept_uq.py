@@ -90,9 +90,11 @@ split = lambda data: data.comp < 0.2  # > 0.8
 #    # 1.0,
 #    split)
 train, val, test = split_dataset(
-    dataset, config["NeuralNetwork"]["Training"]["perc_train"], True
+    dataset,
+    # config["NeuralNetwork"]["Training"]["perc_train"], True)
+    1.0,
+    False,
 )
-#    1.0, False)
 train, val, test = ensure_single_elements_in_train(train, val, test)
 
 train_loader, val_loader, test_loader, sampler_list = create_dataloaders(
@@ -101,11 +103,11 @@ train_loader, val_loader, test_loader, sampler_list = create_dataloaders(
 
 run_uncertainty(
     config_file,  # _file?
-    "logs/",  # fept_uq/3_",
+    "logs/1_fept_uq/3_bias_below2/",
     train_loader,
     val_loader,
     test_loader,
     sampler_list,
     False,
-    True,
+    False,
 )

@@ -79,11 +79,9 @@ def run_uncertainty(
         run_training(
             config_mean, train_loader, val_loader, test_loader, sampler_list, mean_name
         )
+    # mean_model = load_model(config_mean, mean_loaders[0].dataset, mean_name+"_best", path+"/"+mean_name)
     mean_model = load_model(
-        config_mean,
-        mean_loaders[0].dataset,
-        mean_name + "_best",
-        path + "/" + mean_name,
+        config_mean, mean_loaders[0].dataset, mean_name, path + "/" + mean_name
     )
 
     config_file_up_down = os.path.join(path, mean_name, "config.json")
@@ -108,8 +106,12 @@ def run_uncertainty(
         model_down = train_model(down_loaders, sampler_list, down_name, config)
         # save_model(model_down, down_name, "logs/"+down_name)
     else:
-        model_up = load_model(config, up_loaders[0].dataset, up_name, path)
-        model_down = load_model(config, down_loaders[0].dataset, down_name, path)
+        model_up = load_model(
+            config, up_loaders[0].dataset, up_name, path + "/" + up_name
+        )
+        model_down = load_model(
+            config, down_loaders[0].dataset, down_name, path + "/" + down_name
+        )
 
     #### COMPUTE ALL 3 PREDICTIONS ON TRAINING DATA
     (
@@ -202,10 +204,22 @@ def run_uncertainty(
     # plot_split_uq_intervals(ax3, pred_up_train, pred_down_train, c_up_train[0], c_down_train[0], comp_train)
     if num_test > 0:
         plot_uq_intervals(
-            ax3, pred_up_test, pred_down_test, c_up_test[0], c_down_test[0], "test"
+            ax3,
+            pred_up_test,
+            pred_down_test,
+            c_up_test[0],
+            c_down_test[0],
+            "test",
+            "#998ec3",
         )
     plot_uq_intervals(
-        ax3, pred_up_train, pred_down_train, c_up_train[0], c_down_train[0], "train"
+        ax3,
+        pred_up_train,
+        pred_down_train,
+        c_up_train[0],
+        c_down_train[0],
+        "train",
+        "#542788",
     )
     ax3.legend()
     fig3.tight_layout()
@@ -217,12 +231,23 @@ def plot_uq_samples(ax, pred_mean, pred_up, pred_down, y, c_up, c_down, comp):
     Plot mean, upper, and lower predictions.
     """
 
-    # bar = torch.stack([c_down * pred_down, c_up * pred_up], 0).squeeze()
-    # ax.errorbar(comp, pred_mean, yerr=bar, marker="o")
-    ax.scatter(y, pred_mean, edgecolor="#005073", marker="o", facecolor="none")
-    # ax.scatter(y, pred_mean+pred_up, edgecolor=c[1], marker="o", facecolor="none")
-    # ax.scatter(y, pred_mean-pred_down, edgecolor=c[2], marker="o", facecolor="none")
+    """
+    # Mean with error bars.
+    bar = np.column_stack((c_down * pred_down, c_up * pred_up)).T
+    markers, caps, bars = ax.errorbar(comp.squeeze(), pred_mean.squeeze(), yerr=bar, fmt='o', color="#005073", capsize=1.5, elinewidth=1, markersize=8)
+    markers.set_alpha(0.5)
+    [bar.set_alpha(0.5) for bar in bars]
+    [cap.set_alpha(0.5) for cap in caps]
 
+    # Mean only.
+    ax.scatter(comp, y, edgecolor="#005073", marker="o", facecolor="none")
+
+    # Fill between.
+    ax.fill_between(comp, y1, y2, where=y2 >= y1, facecolor='cyan', alpha=0.5, interpolate=True)
+    ax.fill_between(comp, y1, y2, where=y2 <= y1, facecolor='cyan', alpha=0.5, interpolate=True)
+    """
+    # Mean, upper, and lower.
+    ax.scatter(y, pred_mean, edgecolor="#005073", marker="o", facecolor="none")
     ax.scatter(
         y,
         (pred_mean + c_up * pred_up),
@@ -239,19 +264,19 @@ def plot_uq_samples(ax, pred_mean, pred_up, pred_down, y, c_up, c_down, comp):
     )
     # ax.set_xlim([-0.05, 1.05])
     # ax.set_ylim([-0.10, 1.25])
-    # ax.set_xlabel("Atomic fraction (Fe)")
-    # ax.set_ylabel("Predicted enthalpy (normalized)")
-    ax.set_xlabel("DFT free energy")
-    ax.set_ylabel("GCNN free energy")
+    ax.set_xlabel("Atomic fraction (Fe)")
+    ax.set_ylabel("Predicted enthalpy (normalized)")
+    # ax.set_xlabel("DFT free energy")
+    # ax.set_ylabel("GCNN free energy")
 
 
-def plot_uq_intervals(ax, up, down, c_up, c_down, label):
+def plot_uq_intervals(ax, up, down, c_up, c_down, label, c):
     arr = up.detach() * c_up + down.detach() * c_down
     nbins = int(np.sqrt(len(arr)))
     hist, bins = np.histogram(arr, bins=nbins, density=True)
     width = bins[1] - bins[0]
     center = (bins[:-1] + bins[1:]) / 2
-    ax.bar(center, hist, align="center", width=width, label=label)
+    ax.bar(center, hist, align="center", width=width, label=label, color=c, alpha=0.75)
     # savefig("intervals.png")
     # np.savetxt(label+".txt", np.column_stack((center, hist)))
     ax.set_xlabel("Prediction interval width")
