@@ -99,8 +99,8 @@ def run_uncertainty(
     if retrain_up_down:
         # config["NeuralNetwork"]["Architecture"]["hidden_dim"] = 10
         config["NeuralNetwork"]["Architecture"]["freeze_conv_layers"] = True
-        config["NeuralNetwork"]["Architecture"]["set_large_bias"] = True
-        # config["NeuralNetwork"]["Architecture"]["num_epoch"] = 50
+        config["NeuralNetwork"]["Architecture"]["set_large_bias"] = False
+        config["NeuralNetwork"]["Architecture"]["num_epoch"] = 50
         model_up = train_model(up_loaders, sampler_list, up_name, config)
         # save_model(model_up, up_name, "logs/"+up_name)
         model_down = train_model(down_loaders, sampler_list, down_name, config)
@@ -313,10 +313,10 @@ def compute_pi(pred_mean, pred_up, pred_down, y, num_samples_up, num_samples_dow
         pred_up,
         pred_down,
         c_up0_ini=0.0,
-        c_up1_ini=100.0,
+        c_up1_ini=1000.0,
         c_down0_ini=0.0,
-        c_down1_ini=100.0,
-        max_iter=100,
+        c_down1_ini=1000.0,
+        max_iter=1000,
     )
 
     num_outlier_list = [int(num_samples_up * (1 - x) / 2) for x in [0.90]]

@@ -72,6 +72,10 @@ pca_x = pca.transform(data.x)
 """
 
 split = lambda data: 9 in data.x
+# split = lambda data: len(data.x) > 20
+# train, val, test = hydragnn.preprocess.split_dataset_biased(
+#    dataset, config["NeuralNetwork"]["Training"]["perc_train"], split
+# )
 train, val, test = hydragnn.preprocess.split_dataset_ignore(
     dataset, config["NeuralNetwork"]["Training"]["perc_train"], split
 )
@@ -95,6 +99,6 @@ run_uncertainty(
     val_loader,
     test_loader,
     sampler_list,
-    True,
+    False,
     True,
 )
