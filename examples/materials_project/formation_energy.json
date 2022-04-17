@@ -4,7 +4,7 @@
     },
     "Dataset": {
         "name": "MaterialsProject",
-        "path": {"train": "./serialized_dataset/MaterialsProject_train.pkl", "validate": "./serialized_dataset/MaterialsProject_validate.pkl", "test": "./serialized_dataset/MaterialsProject_test.pkl"},
+        "path": {"total": "/Users/5t2/Downloads/MP_DATA/CIF-DATA"},
         "format": "CIF",
         "compositional_stratified_splitting": false,
 	    "rotational_invariance": true,
@@ -23,7 +23,7 @@
         "Architecture": {
             "model_type": "PNA",
             "radius": 3,
-            "max_neighbours": 100000,
+            "max_neighbours": 100,
 	        "periodic_boundary_conditions": false,
             "hidden_dim": 64,
             "num_conv_layers": 10,
@@ -50,7 +50,7 @@
             "denormalize_output": true
         },
         "Training": {
-            "num_epoch": 500,
+            "num_epoch": 100,
             "perc_train": 0.7,
 	    "loss_function_type": "mse",
             "learning_rate": 1e-3,
@@ -60,7 +60,7 @@
     },
     "Visualization": {
         "plot_init_solution": true,
-        "plot_hist_solution": false,
+        "plot_hist_solution": true,
         "create_plots": true
     }
 }

@@ -13,6 +13,7 @@ import os
 import numpy as np
 import pickle
 import pathlib
+from glob import glob
 
 import csv
 
@@ -21,7 +22,9 @@ from torch_geometric.data import Data
 from torch import tensor
 
 from ase.io.cfg import read_cfg
+from ase.io.cif import read_cif
 from ase.io import read
+from ase.spacegroup import get_spacegroup
 
 from hydragnn.utils import iterate_tqdm
 
@@ -94,34 +97,37 @@ class RawDataLoader:
             os.mkdir(serialized_dir)
 
         for dataset_type, raw_data_path in self.path_dictionary.items():
+            all_files = glob(raw_data_path + "/*.cif")
             if not os.path.isabs(raw_data_path):
                 raw_data_path = os.path.join(os.getcwd(), raw_data_path)
             if not os.path.exists(raw_data_path):
                 raise ValueError("Folder not found: ", raw_data_path)
 
-            all_files = os.listdir(raw_data_path)
             assert len(all_files) > 0, "No data files provided in {}!".format(
                 raw_data_path
             )
 
             dictionary_property = None
-
             if self.data_format == "CIF":
-                property_path = raw_data_path + "/" + "formationenergy.csv"
+                property_path = (
+                    raw_data_path + "/../properties-reference/" + "formationenergy.csv"
+                )
                 dictionary_property = import_property_csv_file(property_path)
+            dataset = [None] * len(dictionary_property.keys())
 
-            for name in os.listdir(raw_data_path):
-                if name == ".DS_Store":
-                    continue
+            count = 0
+            for name in iterate_tqdm(all_files, 2):
                 # if the directory contains file, iterate over them
-                if os.path.isfile(os.path.join(raw_data_path, name)):
-                    data_object = self.__transform_input_to_data_object_base(
-                        filepath=os.path.join(raw_data_path, name),
-                        dictionary_property=dictionary_property,
-                    )
-                    if not isinstance(data_object, type(None)):
-                        dataset.append(data_object)
+                data = self.__transform_input_to_data_object_base(
+                    filepath=os.path.join(raw_data_path, name),
+                    dictionary_property=dictionary_property,
+                )
+                if data is not None:
+                    dataset[count] = data
+                    count += 1
+
                 # if the directory contains subdirectories, explore their content
+                """
                 elif os.path.isdir(os.path.join(raw_data_path, name)):
                     dir_name = os.path.join(raw_data_path, name)
                     for subname in os.listdir(dir_name):
@@ -132,11 +138,7 @@ class RawDataLoader:
                             )
                             if not isinstance(data_object, type(None)):
                                 dataset.append(data_object)
-
-            if self.data_format == "LSMS":
-                for idx, data_object in enumerate(dataset):
-                    dataset[idx] = self.__charge_density_update_for_LSMS(data_object)
-
+                """
             # scaled features by number of nodes
             dataset = self.__scale_features_by_num_nodes(dataset)
 
@@ -162,13 +164,13 @@ class RawDataLoader:
         return dataset
 
     def __transform_input_to_data_object_base(self, filepath, dictionary_property):
-        if self.data_format == "LSMS" or self.data_format == "unit_test":
-            data_object = self.__transform_LSMS_input_to_data_object_base(
-                filepath=filepath
-            )
-        elif self.data_format == "CFG" or self.data_format == "CIF":
+        if self.data_format == "CFG" or self.data_format == "CIF":
             data_object = self.__transform_input_file_to_data_object_base(
                 filepath=filepath, dictionary_property=dictionary_property
+            )
+        elif self.data_format == "LSMS" or self.data_format == "unit_test":
+            data_object = self.__transform_LSMS_input_to_data_object_base(
+                filepath=filepath
             )
 
         return data_object
@@ -188,28 +190,14 @@ class RawDataLoader:
             Data object representing structure of a graph sample.
         """
 
-        if filepath.endswith(".cfg"):
+        file_path_splitting = os.path.split(filepath)
+        filename_without_extension = os.path.splitext(file_path_splitting[1])[0]
 
-            data_object = self.__transform_CFG_file_to_data_object(filepath)
-
+        if filename_without_extension in dictionary_property.keys():
+            data_object = self.__transform_CIF_file_to_data_object(
+                filepath, dictionary_property, filename_without_extension
+            )
             return data_object
-
-        elif filepath.endswith(".cif"):
-
-            file_path_splitting = os.path.split(filepath)
-            filename_without_extension = os.path.splitext(file_path_splitting[1])[0]
-
-            if filename_without_extension in dictionary_property.keys():
-                data_object = self.__transform_CIF_file_to_data_object(
-                    filepath, dictionary_property
-                )
-                return data_object
-
-            else:
-                return None
-
-        else:
-            return None
 
     def __transform_CFG_file_to_data_object(self, filepath):
 
@@ -254,27 +242,25 @@ class RawDataLoader:
 
         return data_object
 
-    def __transform_CIF_file_to_data_object(self, filepath, dictionary_property):
+    def __transform_CIF_file_to_data_object(
+        self, filepath, dictionary_property, filename_without_extension
+    ):
 
         # FIXME:
         #  this still assumes bulk modulus is specific to the CIG format.
 
-        # I do not succeed in making ase.io.cif.read_cfi work, so I use ase.io.read
+        # I do not succeed in making ase.io.cif.read_cif work, so I use ase.io.read
         ase_object = read(filepath)
 
-        file_path_splitting = os.path.split(filepath)
-        filename_without_extension = os.path.splitext(file_path_splitting[1])[0]
-
         data_object = Data()
-        data_object.supercell_size = tensor(ase_object.cell.array).float()
-        data_object.pos = tensor(ase_object.arrays["positions"]).float()
+        sg = get_spacegroup(ase_object)
+        data_object.spacegroup = sg.symbol
+        data_object.spacegroup_no = sg.no
+        data_object.supercell_size = tensor(ase_object.cell.array, dtype=torch.float32)
+        data_object.pos = tensor(ase_object.arrays["positions"], dtype=torch.float32)
         proton_numbers = np.expand_dims(ase_object.arrays["numbers"], axis=1)
-        data_object.x = tensor(proton_numbers).float()
-
-        g_feature = []
-        g_feature.append(float(dictionary_property[filename_without_extension]))
-        data_object.y = tensor(g_feature)
-
+        data_object.x = tensor(proton_numbers, dtype=torch.float32)
+        data_object.y = tensor([float(dictionary_property[filename_without_extension])])
         return data_object
 
     def __transform_LSMS_input_to_data_object_base(self, filepath):
@@ -289,6 +275,8 @@ class RawDataLoader:
         Data
             Data object representing structure of a graph sample.
         """
+        if name == ".DS_Store":
+            return None
 
         data_object = Data()
 
