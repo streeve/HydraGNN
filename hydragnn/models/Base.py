@@ -117,7 +117,7 @@ class Base(Module):
                 # Set the bias of the last linear layer to a large value (UQ)
                 # Not the actual last layer because of ReLU added for UQ residuals
                 bias = head[-1].bias[0]
-                head[-1].bias.data.fill_(bias * 50)
+                head[-1].bias.data.fill_(bias * 50).to("cuda:0")
 
     def _init_node_conv(self):
         # *******convolutional layers for node level predictions*******#
@@ -238,14 +238,9 @@ class Base(Module):
             use_edge_attr = True
 
         ### encoder part ####
-        if use_edge_attr:
-            for conv, batch_norm in zip(self.convs, self.batch_norms):
-                c = conv(x=x, edge_index=edge_index, edge_attr=data.edge_attr)
-                x = F.relu(batch_norm(c))
-        else:
-            for conv, batch_norm in zip(self.convs, self.batch_norms):
-                c = conv(x=x, edge_index=edge_index)
-                x = F.relu(batch_norm(c))
+        for conv, batch_norm in zip(self.convs, self.batch_norms):
+            c = conv(x=x.to("cuda:0"), edge_index=edge_index.to("cuda:0"))
+            x = F.relu(batch_norm(c))
 
         #### multi-head decoder part####
         # shared dense layers for graph level output

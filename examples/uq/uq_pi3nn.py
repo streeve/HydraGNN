@@ -79,10 +79,7 @@ def run_uncertainty(
         run_training(
             config_mean, train_loader, val_loader, test_loader, sampler_list, mean_name
         )
-    # mean_model = load_model(config_mean, mean_loaders[0].dataset, mean_name+"_best", path+"/"+mean_name)
-    mean_model = load_model(
-        config_mean, mean_loaders[0].dataset, mean_name, path + "/" + mean_name
-    )
+    mean_model = load_model(config_mean, mean_loaders[0].dataset, mean_name+"_best", path+"/"+mean_name)
 
     config_file_up_down = os.path.join(path, mean_name, "config.json")
     with open(config_file_up_down, "r") as f:
@@ -99,7 +96,7 @@ def run_uncertainty(
     if retrain_up_down:
         # config["NeuralNetwork"]["Architecture"]["hidden_dim"] = 10
         config["NeuralNetwork"]["Architecture"]["freeze_conv_layers"] = True
-        config["NeuralNetwork"]["Architecture"]["set_large_bias"] = False
+        config["NeuralNetwork"]["Architecture"]["set_large_bias"] = True
         config["NeuralNetwork"]["Architecture"]["num_epoch"] = 50
         model_up = train_model(up_loaders, sampler_list, up_name, config)
         # save_model(model_up, up_name, "logs/"+up_name)
@@ -107,10 +104,10 @@ def run_uncertainty(
         # save_model(model_down, down_name, "logs/"+down_name)
     else:
         model_up = load_model(
-            config, up_loaders[0].dataset, up_name, path + "/" + up_name
+            config, up_loaders[0].dataset, up_name+"_best", path + "/" + up_name
         )
         model_down = load_model(
-            config, down_loaders[0].dataset, down_name, path + "/" + down_name
+            config, down_loaders[0].dataset, down_name+"_best", path + "/" + down_name
         )
 
     #### COMPUTE ALL 3 PREDICTIONS ON TRAINING DATA

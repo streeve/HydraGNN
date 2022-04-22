@@ -4,10 +4,10 @@
     },
     "Dataset": {
         "name": "MaterialsProject",
-        "path": {"total": "/Users/5t2/Downloads/MP_DATA/CIF-DATA"},
+	"path": {"total": "serialized_dataset/MaterialsProject.pkl"},
         "format": "CIF",
         "compositional_stratified_splitting": false,
-	    "rotational_invariance": true,
+	    "rotational_invariance": false,
         "node_features": {
             "name": ["num_of_protons"],
             "dim": [1],
