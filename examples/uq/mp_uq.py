@@ -31,6 +31,7 @@ compute_edges = get_radius_graph_config(config["NeuralNetwork"]["Architecture"])
 feature_indices = config["NeuralNetwork"]["Variables_of_interest"][
     "input_node_features"
 ]
+types = []
 for data in dataset:
     update_predicted_values(
         config["NeuralNetwork"]["Variables_of_interest"]["type"],
@@ -39,13 +40,27 @@ for data in dataset:
     )
     compute_edges(data)
     data.x = data.x[:, feature_indices]
+
+    #unique = np.unique(data.x.numpy())
+    #for t in unique:
+    #    if t not in types:
+    #        types.append(int(t*93+1+0.1))
+
+#print(types)
+#print(len(types))
+    # 89 unique types, 94 max element
+    data.x = torch.nn.functional.one_hot(data.x.to(torch.int64), num_classes=94).to(torch.float32)
 """
+
 sloader = SerializedDataLoader(config)
 dataset = sloader.load_serialized_data(
     "serialized_dataset/MaterialsProject.pkl", config
 )
-for d in dataset:
-    d.x = torch.nn.functional.one_hot(d.x.to(torch.int64)).to(torch.float32)
+for data in dataset:
+    data.x = data.x*93
+    #print(data.x)
+    data.x = torch.nn.functional.one_hot(data.x.to(torch.int64), num_classes=94).to(torch.float32).squeeze(dim=1)
+    #print(data.x)
 
 # Rhombohedral
 # split = lambda data: "R" in data.spacegroup
@@ -59,17 +74,19 @@ for d in dataset:
 # split = lambda data: len(np.unique(data.x)) > 4
 
 # Any of the 3 example test sets
-split = lambda data: (data.spacegroup_no < 195 and data.spacegroup_no > 142) or len(np.unique(data.x.cpu())) > 4 or np.any(np.isclose(data.x.cpu(), (9-1)/(94.0-1), atol=1e-4))
+split_all = lambda data: len(torch.nonzero(torch.sum(data.x, dim=0))) > 4 or 1 in data.x[:,8] or (data.spacegroup_no < 195 and data.spacegroup_no > 142)
+ignore = lambda data: 1 in data.x[:,8] or (data.spacegroup_no < 195 and data.spacegroup_no > 142)
+bias = lambda data: len(torch.nonzero(torch.sum(data.x, dim=0))) > 4
 
-#train, val, test = split_dataset_biased(
-#    dataset, config["NeuralNetwork"]["Training"]["perc_train"], split
+#train, val, test = split_dataset_biased_ignore(
+#    dataset, config["NeuralNetwork"]["Training"]["perc_train"], bias, ignore,
 #)
 
 train, val, test = split_dataset_ignore(
     dataset,
     config["NeuralNetwork"]["Training"]["perc_train"],
 #    # 1.0,
-    split)
+    split_all)
 # train, val, test = split_dataset(
 #    dataset,
 #    config["NeuralNetwork"]["Training"]["perc_train"], #1.0,
@@ -87,6 +104,6 @@ run_uncertainty(
     val_loader,
     test_loader,
     sampler_list,
-    True,
+    False,
     True,
 )

@@ -75,15 +75,17 @@ def run_uncertainty(
     config_mean = update_config(
         config_mean, mean_loaders[0], mean_loaders[1], mean_loaders[2]
     )
+    config_mean["NeuralNetwork"]["Variables_of_interest"]["input_node_features"] = list(range(94)) # one hot
     if retrain_mean:
         run_training(
             config_mean, train_loader, val_loader, test_loader, sampler_list, mean_name
         )
-    mean_model = load_model(config_mean, mean_loaders[0].dataset, mean_name+"_best", path+"/"+mean_name)
+    #mean_model = load_model(config_mean, mean_loaders[0].dataset, mean_name+"_best", path+"/"+mean_name)
 
     config_file_up_down = os.path.join(path, mean_name, "config.json")
     with open(config_file_up_down, "r") as f:
         config = json.load(f)
+    mean_model = load_model(config, mean_loaders[0].dataset, mean_name+"_best", path+"/"+mean_name)
 
     #### CREATE THE DATASET LOADERS
     up_loaders, down_loaders, up_sampler, down_sampler = create_loaders(
@@ -97,7 +99,7 @@ def run_uncertainty(
         # config["NeuralNetwork"]["Architecture"]["hidden_dim"] = 10
         config["NeuralNetwork"]["Architecture"]["freeze_conv_layers"] = True
         config["NeuralNetwork"]["Architecture"]["set_large_bias"] = True
-        config["NeuralNetwork"]["Architecture"]["num_epoch"] = 50
+        config["NeuralNetwork"]["Training"]["num_epoch"] = 25
         model_up = train_model(up_loaders, sampler_list, up_name, config)
         # save_model(model_up, up_name, "logs/"+up_name)
         model_down = train_model(down_loaders, sampler_list, down_name, config)

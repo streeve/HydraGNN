@@ -167,6 +167,32 @@ def split_dataset_ignore(
     return trainset, valset, testset
 
 
+def split_dataset_biased_ignore(
+    dataset: list,
+    perc_train: float,
+    bias_func,
+    ignore_func,
+):
+    perc_val = (1 - perc_train) / 2 + perc_train
+    data_size = len(dataset)
+    trainset = []
+    valset = []
+    testset = []
+    for d, data in enumerate(tqdm(dataset)):
+        rand = random()
+        if ignore_func(data):
+            continue
+        elif bias_func(data):
+            testset.append(dataset[d])
+        elif rand < perc_train:
+            trainset.append(dataset[d])
+        elif rand < perc_val:
+            valset.append(dataset[d])
+
+    print(len(trainset), len(valset), len(testset))
+    return trainset, valset, testset
+
+
 def load_train_val_test_sets(config):
     timer = Timer("load_data")
     timer.start()

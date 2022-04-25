@@ -5,6 +5,7 @@
     "Dataset": {
         "name": "MaterialsProject",
 	"path": {"total": "serialized_dataset/MaterialsProject.pkl"},
+	"rpath": {"total": "/gpfs/alpine/world-shared/csc457/reeve/MP_DATA/CIF-DATA"},
         "format": "CIF",
         "compositional_stratified_splitting": false,
 	    "rotational_invariance": false,
@@ -47,7 +48,7 @@
             "output_names": ["formation_energy"],
             "output_index": [0],
             "type": ["graph"],
-            "denormalize_output": true
+            "denormalize_output": false
         },
         "Training": {
             "num_epoch": 100,
