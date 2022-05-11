@@ -4,8 +4,8 @@
     },
     "Dataset": {
         "name": "MaterialsProject",
-	"path": {"total": "serialized_dataset/MaterialsProject.pkl"},
-	"rpath": {"total": "/gpfs/alpine/world-shared/csc457/reeve/MP_DATA/CIF-DATA"},
+        "path": {"total": "serialized_dataset/MaterialsProject.pkl"},
+        "rpath": {"total": "/Users/5t2/Downloads/MP_DATA/CIF-DATA"},
         "format": "CIF",
         "compositional_stratified_splitting": false,
 	    "rotational_invariance": false,

@@ -118,7 +118,7 @@ class SerializedDataLoader:
 
         # Move data to the device, if used. # FIXME: this does not respect the choice set by use_gpu
         device = get_device(verbosity_level=self.verbosity)
-        for data in dataset:
+        for data in iterate_tqdm(dataset, 2):
             data.to(device)
             update_predicted_values(
                 config["NeuralNetwork"]["Variables_of_interest"]["type"],

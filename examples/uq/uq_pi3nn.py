@@ -75,17 +75,21 @@ def run_uncertainty(
     config_mean = update_config(
         config_mean, mean_loaders[0], mean_loaders[1], mean_loaders[2]
     )
-    config_mean["NeuralNetwork"]["Variables_of_interest"]["input_node_features"] = list(range(94)) # one hot
+    config_mean["NeuralNetwork"]["Variables_of_interest"]["input_node_features"] = list(
+        range(94)
+    )  # one hot
     if retrain_mean:
         run_training(
             config_mean, train_loader, val_loader, test_loader, sampler_list, mean_name
         )
-    #mean_model = load_model(config_mean, mean_loaders[0].dataset, mean_name+"_best", path+"/"+mean_name)
+    # mean_model = load_model(config_mean, mean_loaders[0].dataset, mean_name+"_best", path+"/"+mean_name)
 
     config_file_up_down = os.path.join(path, mean_name, "config.json")
     with open(config_file_up_down, "r") as f:
         config = json.load(f)
-    mean_model = load_model(config, mean_loaders[0].dataset, mean_name+"_best", path+"/"+mean_name)
+    mean_model = load_model(
+        config, mean_loaders[0].dataset, mean_name + "_best", path + "/" + mean_name
+    )
 
     #### CREATE THE DATASET LOADERS
     up_loaders, down_loaders, up_sampler, down_sampler = create_loaders(
@@ -106,10 +110,10 @@ def run_uncertainty(
         # save_model(model_down, down_name, "logs/"+down_name)
     else:
         model_up = load_model(
-            config, up_loaders[0].dataset, up_name+"_best", path + "/" + up_name
+            config, up_loaders[0].dataset, up_name + "_best", path + "/" + up_name
         )
         model_down = load_model(
-            config, down_loaders[0].dataset, down_name+"_best", path + "/" + down_name
+            config, down_loaders[0].dataset, down_name + "_best", path + "/" + down_name
         )
 
     #### COMPUTE ALL 3 PREDICTIONS ON TRAINING DATA
@@ -357,28 +361,28 @@ def compute_predictions(loader, models, config):
     for m in models:
         m.eval()
 
-    device = next(models[0].parameters()).device
+    # device = next(models[0].parameters()).device
     verbosity = config["Verbosity"]["level"]
 
     pred = [None for i in range(len(models))]
     y = None
     comp = None
     for data in iterate_tqdm(loader, verbosity):
-        data = data.to(device)
+        # data = data.to(device)
         for i, m in enumerate(models):
-            result = m(data)[0]
+            result = m(data)[0].detach()
             if pred[i] == None:
                 pred[i] = result
             else:
                 pred[i] = torch.cat((pred[i], result), 0)
         if y == None:
-            y = data.y
-            if comp == None and hasattr(data, "comp"):
-                comp = data.comp
+            y = data.y.detach()
+            # if comp == None and hasattr(data, "comp"):
+            #    comp = data.comp.detach()
         else:
-            y = torch.cat((y, data.y), 0)
-            if hasattr(data, "comp"):
-                comp = torch.cat((comp, data.comp), 0)
+            y = torch.cat((y, data.y.detach()), 0)
+            # if hasattr(data, "comp"):
+            #    comp = torch.cat((comp, data.comp), 0)
 
     return pred[0].detach(), pred[1].detach(), pred[2].detach(), y.detach(), comp
 

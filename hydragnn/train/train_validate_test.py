@@ -139,7 +139,11 @@ def train_validate_test(
         if test_rmse < best_rmse:
             best_rmse = test_rmse
             best_model = deepcopy(model)
-            save_model(best_model, model_with_config_name + "_best", "logs/" + model_with_config_name)
+            save_model(
+                best_model,
+                model_with_config_name + "_best",
+                "logs/" + model_with_config_name,
+            )
     timer.stop()
 
     # At the end of training phase, do the one test run for visualizer to get latest predictions
