@@ -9,6 +9,7 @@ from hydragnn.preprocess import (
     split_dataset,
     split_dataset_biased,
     split_dataset_ignore,
+    split_dataset_biased_ignore,
     create_dataloaders,
     update_predicted_values,
     get_radius_graph_config,
@@ -16,7 +17,7 @@ from hydragnn.preprocess import (
 from hydragnn.utils import setup_ddp, update_config
 from uq_pi3nn import run_uncertainty
 
-os.environ["SERIALIZED_DATA_PATH"] = "/gpfs/alpine/world-shared/csc457/reeve"
+os.environ["SERIALIZED_DATA_PATH"] = os.getcwd()
 
 config_file = "./examples/materials_project/formation_energy.json"
 with open(config_file, "r") as f:
@@ -46,26 +47,80 @@ for data in dataset:
     #    if t not in types:
     #        types.append(int(t*93+1+0.1))
 
+    # 89 unique types, 94 max element
+    data.x = data.x*93
+    data.x = torch.nn.functional.one_hot(data.x.to(torch.int64), num_classes=94).to(torch.float32).squeeze(dim=1)
 #print(types)
 #print(len(types))
-    # 89 unique types, 94 max element
-    data.x = torch.nn.functional.one_hot(data.x.to(torch.int64), num_classes=94).to(torch.float32)
 """
-
 sloader = SerializedDataLoader(config)
 dataset = sloader.load_serialized_data(
     "serialized_dataset/MaterialsProject.pkl", config
 )
 for data in dataset:
+    # 89 unique types, 94 max element
+    data.x = data.x * 93
+    data.x = (
+        torch.nn.functional.one_hot(data.x.to(torch.int64), num_classes=94)
+        .to(torch.float32)
+        .squeeze(dim=1)
+    )
+
+"""from ase import build, Atoms
+P = np.identity(3) * 2
+for d, data in enumerate(tqdm(dataset)):
+    if len(data.x) < 6:
+        ase_atom = Atoms(
+            symbols=data.x,
+            positions=data.pos,
+            cell=data.supercell_size,
+            pbc=True,
+        )
+        ase_super = build.make_supercell(ase_atom, P, wrap=False)
+        data.pos = torch.tensor(ase_super.arrays["positions"], dtype=torch.float32)
+        data.x = torch.tensor(np.expand_dims(ase_super.arrays["numbers"], axis=1), dtype=torch.float32)
+        data.supercell_size = torch.tensor(ase_super.cell.array, dtype=torch.float32)
+        print(data.pos)
     data.x = data.x*93
     #print(data.x)
     data.x = torch.nn.functional.one_hot(data.x.to(torch.int64), num_classes=94).to(torch.float32).squeeze(dim=1)
     #print(data.x)
+    feature[d, :] = data.x.sum(axis=0).numpy()
+"""
+"""
+import umap
+import matplotlib.pyplot as plt
+from matplotlib import colors
+feature = np.empty(shape=[len(dataset), 94])
+reducer = umap.UMAP(random_state=67873)
+embedding = reducer.fit_transform(feature)
+#print(np.shape(feature))
+clist = ["#f4a582", "#0571b0"]
+#cmap = colors.ListedColormap(clist)
+output = [clist[1]]*len(dataset)
+
+points = plt.scatter(
+    embedding[:, 0],
+    embedding[:, 1],
+    c=output,
+    edgecolors=None,
+    s=2,
+    #cmap=cmap,
+    alpha=0.4)
+plt.savefig("0.png")
+for e in range(94): #[0, 7, 8, 25, 77, 28, 33, 77]:
+    for d, data in enumerate(tqdm(dataset)):
+        #output = (feature[d, e] > 0).astype(int)
+        output[d] = clist[0] if feature[d, e] > 0 else clist[1] # 8 F
+    points.set_color(output)
+    plt.savefig(str(e+1)+".png")
+    #plt.show()
+"""
 
 # Rhombohedral
 # split = lambda data: "R" in data.spacegroup
 # Ranges of space groups
-#split = lambda data: data.spacegroup_no < 195 and data.spacegroup_no > 142
+# split = lambda data: data.spacegroup_no < 195 and data.spacegroup_no > 142
 # (data.spacegroup_no in [196, 202, 203, 209, 210, 216, 219, 225, 226, 227, 228])
 # int(data.spacegroup_no) < 3 #or (data.spacegroup_no > 142 and data.spacegroup_no < 195)
 # Systems with lithium (normalized values)
@@ -74,19 +129,29 @@ for data in dataset:
 # split = lambda data: len(np.unique(data.x)) > 4
 
 # Any of the 3 example test sets
-split_all = lambda data: len(torch.nonzero(torch.sum(data.x, dim=0))) > 4 or 1 in data.x[:,8] or (data.spacegroup_no < 195 and data.spacegroup_no > 142)
-ignore = lambda data: 1 in data.x[:,8] or (data.spacegroup_no < 195 and data.spacegroup_no > 142)
-bias = lambda data: len(torch.nonzero(torch.sum(data.x, dim=0))) > 4
+split_all = (
+    lambda data: len(torch.nonzero(torch.sum(data.x, dim=0))) > 4
+    or 1 in data.x[:, 8]
+    or (data.spacegroup_no < 195 and data.spacegroup_no > 142)
+)
+ignore = (
+    lambda data: (data.spacegroup_no < 195 and data.spacegroup_no > 142)
+    or len(torch.nonzero(torch.sum(data.x, dim=0))) > 4
+)
+bias = lambda data: 1 in data.x[:, 19]  # 8]
 
-#train, val, test = split_dataset_biased_ignore(
-#    dataset, config["NeuralNetwork"]["Training"]["perc_train"], bias, ignore,
-#)
-
-train, val, test = split_dataset_ignore(
+train, val, test = split_dataset_biased_ignore(
     dataset,
     config["NeuralNetwork"]["Training"]["perc_train"],
+    bias,
+    ignore,
+)
+
+# train, val, test = split_dataset_ignore(
+#    dataset,
+#    config["NeuralNetwork"]["Training"]["perc_train"],
 #    # 1.0,
-    split_all)
+#    split_all)
 # train, val, test = split_dataset(
 #    dataset,
 #    config["NeuralNetwork"]["Training"]["perc_train"], #1.0,
@@ -105,5 +170,5 @@ run_uncertainty(
     test_loader,
     sampler_list,
     False,
-    True,
+    False,
 )

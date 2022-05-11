@@ -180,10 +180,10 @@ def split_dataset_biased_ignore(
     testset = []
     for d, data in enumerate(tqdm(dataset)):
         rand = random()
-        if ignore_func(data):
-            continue
-        elif bias_func(data):
+        if bias_func(data):
             testset.append(dataset[d])
+        elif ignore_func(data):
+            continue
         elif rand < perc_train:
             trainset.append(dataset[d])
         elif rand < perc_val:
